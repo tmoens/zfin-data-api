@@ -1,19 +1,20 @@
 ## Description
 
-This is a a single-purpose stop gap. 
+This is a a single purpose stop-gap API application.
 
 ### Problem:
 The wonderful site [ZFIN](www.zfin.org) provides a user interface that allows
 zebrafish researcher to peruse a wealth of zebrafish genetics information.
 
 Of the many classes of objects available there, there are two Mutations and Transgnes
-which are known to the research community by an abbreviated name called which is loosely
+which are known to the research community by an abbreviated name which is loosely
 refered to as an allele. To all intents and purposes, the allele is a human friendly identifier
-for a mutation or a transgene.  The formal identifier is a ZFIN_Id is not human friendly,
+for a mutation or a transgene.  The formal ZFIN identifier is not human friendly,
 but it is the key by which other systems know a particular mutation or transgene.
 
-A particular system exists that knows a an allele name, but wants the ZFIN_Id and the only
-way to get it is to have the user manually go to zfin, type in the allele name, copy the
+A particular system exists that frequently needs to resolve from an allele name to a
+to a ZFIN_Id.
+The only way to do this is to have the user manually go to ZFIN, type in the allele name, copy the
 ZFIN_Id and paste it into the other system. 
 
 An API could achieve the same thing much more efficiently, but there is no such API available.
@@ -43,13 +44,14 @@ $ npm install
 
 ### Create a mySQL database - development and production
 
-The code assumes mySQL, though in theory you caould use whatever database you want.
+The code assumes mySQL.
 You need to create a user and a database in mysql.
 The code will create tables automatically.
 
 ### Configure the application - development
 
 Edit the .development.env file - the instructions in that file are pretty clear.
+You will need put your database name, user and password there.
 
 ### Configure the application - production
 
@@ -85,7 +87,7 @@ http://localhost:your-port/transgene/loadFromZfin
 ```
 
 Note: While working on the system, you should probably store abbreviated versions to the
-ZFIN download files on your local server and configure your system to access those files
+ZFIN download files on your local server and configure .development.env file to access those files
 to avoid repeatedly downloading the large ZFIN files.
 
 ### Run the API - production
@@ -105,4 +107,9 @@ Your system probably alread has a web server like Apache2.  If not you have to i
 Configure it with a virtual site which will pass
 requests through to your node server.  
 
+### Call the API
 
+```
+https://the_domain_you_are_using/mutation/allele/the_allele_you_are_interensted_in
+```
+If the allele is known, you get back a small record which includes the ZFIN_Id.
