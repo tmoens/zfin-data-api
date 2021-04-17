@@ -1,0 +1,54 @@
+{
+    "keep": {
+        "days": true,
+        "amount": 14
+    },
+    "auditLog": "log\\.547e2fb07aee7e920ce0d0036679fb9d34577195-audit.json",
+    "files": [
+        {
+            "date": 1618580867431,
+            "name": "log\\zf-2021-04-16-06.log",
+            "hash": "8a3bbff7171c087e1af22008dcc723b4"
+        },
+        {
+            "date": 1618581753298,
+            "name": "log\\zf-2021-04-16-07.log",
+            "hash": "e2d79966cb3717a724f701312352ecce"
+        },
+        {
+            "date": 1618587870357,
+            "name": "log\\zf-2021-04-16-08.log",
+            "hash": "16cd19e8694e14bffe3548f2fbedf916"
+        },
+        {
+            "date": 1618588851262,
+            "name": "log\\zf-2021-04-16-09.log",
+            "hash": "e7d74e668e7652a1a2cc0278b734ccec"
+        },
+        {
+            "date": 1618593927862,
+            "name": "log\\zf-2021-04-16-10.log",
+            "hash": "8321d87fee897d75264b09f0bf89d3a0"
+        },
+        {
+            "date": 1618596434187,
+            "name": "log\\zf-2021-04-16-11.log",
+            "hash": "6e989c8539a962fffbd33704c3cc5421"
+        },
+        {
+            "date": 1618609469052,
+            "name": "log\\zf-2021-04-16-14.log",
+            "hash": "748b617a6d831f7ded913b10aa31775f"
+        },
+        {
+            "date": 1618611479822,
+            "name": "log\\zf-2021-04-16-15.log",
+            "hash": "3121636554e6030c852c55865ffe3a33"
+        },
+        {
+            "date": 1618614066508,
+            "name": "log\\zf-2021-04-16-16.log",
+            "hash": "7d338ccd69f7547a55c7be5545da7d0a"
+        }
+    ]
+}
