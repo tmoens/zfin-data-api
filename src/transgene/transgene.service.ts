@@ -70,7 +70,7 @@ export class TransgeneService {
         await this.insert(inserts);
         this.logger.log(`Done transgene load from ${this.configService.get("ZFIN_TRANSGENE_URL")}`);
       });
-    return 'allswellthatendswell';
+    return 'Loading triggered.';
   };
 
   async insert(tgs: Transgene[]): Promise<boolean> {

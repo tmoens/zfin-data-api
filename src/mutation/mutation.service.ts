@@ -23,6 +23,10 @@ export class MutationService {
   }
 
   async loadFromZfin(): Promise<any> {
+    if (!this.configService.get('ALLOW_LOADING_VIA_API')) {
+      this.logger.log(`Attempt to load mutation data using the API when that function is disabled.`);
+      return 'Disabled';
+    }
     this.logger.log(`Starting mutation load from ${this.configService.get("ZFIN_MUTATION_URL")}`);
     this.httpService.get(this.configService.get("ZFIN_MUTATION_URL")).subscribe(async (response) => {
 
@@ -61,7 +65,7 @@ export class MutationService {
       this.logger.log(`Done mutation load from ${this.configService.get("ZFIN_MUTATION_URL")}`);
 
     });
-    return 'nothing';
+    return 'Triggered mutation loading from ZFIN';
   }
 
   async insert(mutations: Mutation[]): Promise<boolean> {
