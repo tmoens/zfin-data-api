@@ -15,9 +15,7 @@ async function bootstrap() {
   await transgeneService.loadFromZfin();
   await mutationService.loadFromZfin();
 
-console.log('a1');
   await delay(60000);
-  console.log('b');
 
   /* This is not a persistent service, so let's exit */
   process.exit();

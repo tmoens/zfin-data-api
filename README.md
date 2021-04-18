@@ -92,12 +92,13 @@ to avoid repeatedly downloading the large ZFIN files.
 
 ### Run the API - production
 
-#### Loader
-You need to run the loaders as a once a day cron job.
-
 ### API Server
 Run the API as a service to ensure some resilience over restarts.
 For example, using systemd on Linux. 
+
+###Loader
+You can run the loader regularly by making both a service and a timer
+for the loader program under systemd.
 
 ### Web Access to API
 
