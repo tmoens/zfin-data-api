@@ -1,7 +1,5 @@
 import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
 import { MutationService } from './mutation.service';
-import { CreateMutationDto } from './dto/create-mutation.dto';
-import { UpdateMutationDto } from './dto/update-mutation.dto';
 
 @Controller('mutation')
 export class MutationController {

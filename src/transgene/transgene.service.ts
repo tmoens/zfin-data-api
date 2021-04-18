@@ -1,10 +1,8 @@
 import { HttpService, Inject, Injectable, Logger } from "@nestjs/common";
-import { CreateTransgeneDto } from './dto/create-transgene.dto';
-import { UpdateTransgeneDto } from './dto/update-transgene.dto';
 import { InjectRepository } from "@nestjs/typeorm";
-import { Mutation } from "../mutation/entities/mutation.entity";
+import { Mutation } from "../mutation/mutation.entity";
 import { Repository } from "typeorm";
-import { Transgene } from "./entities/transgene.entity";
+import { Transgene } from "./transgene.entity";
 import { ZfinTransgeneRecord } from "./zfin-transgene-record";
 import { WINSTON_MODULE_NEST_PROVIDER } from "nest-winston";
 import { ConfigService } from "@nestjs/config";

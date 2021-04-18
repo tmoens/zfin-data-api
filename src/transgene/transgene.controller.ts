@@ -1,7 +1,5 @@
 import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
 import { TransgeneService } from './transgene.service';
-import { CreateTransgeneDto } from './dto/create-transgene.dto';
-import { UpdateTransgeneDto } from './dto/update-transgene.dto';
 
 @Controller('transgene')
 export class TransgeneController {

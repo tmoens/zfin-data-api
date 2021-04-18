@@ -1,9 +1,7 @@
 import { HttpService, Inject, Injectable, Logger } from "@nestjs/common";
-import { CreateMutationDto } from './dto/create-mutation.dto';
-import { UpdateMutationDto } from './dto/update-mutation.dto';
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
-import { Mutation } from "./entities/mutation.entity";
+import { Mutation } from "./mutation.entity";
 import { ZfinMutationRecord } from "./zfin-mutation-record";
 import { WINSTON_MODULE_NEST_PROVIDER } from "nest-winston";
 import { ConfigService } from "@nestjs/config";

@@ -1,4 +1,4 @@
-import { Transgene } from './entities/transgene.entity';
+import { Transgene } from './transgene.entity';
 
 export class ZfinTransgeneRecord {
   constructor(

@@ -2,7 +2,7 @@ import { HttpModule, Module } from "@nestjs/common";
 import { TransgeneService } from './transgene.service';
 import { TransgeneController } from './transgene.controller';
 import { TypeOrmModule } from "@nestjs/typeorm";
-import { Transgene } from "./entities/transgene.entity";
+import { Transgene } from "./transgene.entity";
 
 @Module({
   imports:[

@@ -37,7 +37,7 @@
 // Protein Consequence Position End
 // Protein Reference Sequence
 
-import { Mutation } from "./entities/mutation.entity";
+import { Mutation } from "./mutation.entity";
 
 export class ZfinMutationRecord {
   constructor(

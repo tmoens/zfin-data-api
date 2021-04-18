@@ -4,9 +4,9 @@ import { AppService } from './app.service';
 import { ConfigModule, ConfigService } from "@nestjs/config";
 import { TransgeneModule } from "./transgene/transgene.module";
 import { TypeOrmModule } from "@nestjs/typeorm";
-import { Transgene } from "./transgene/entities/transgene.entity";
+import { Transgene } from "./transgene/transgene.entity";
 import { MutationModule } from './mutation/mutation.module';
-import { Mutation } from "./mutation/entities/mutation.entity";
+import { Mutation } from "./mutation/mutation.entity";
 
 import * as winston from "winston";
 import * as DailyRotateFile from "winston-daily-rotate-file";
