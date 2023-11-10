@@ -1,10 +1,11 @@
-import { HttpService, Inject, Injectable, Logger } from "@nestjs/common";
-import { InjectRepository } from "@nestjs/typeorm";
-import { Repository } from "typeorm";
-import { Mutation } from "./mutation.entity";
-import { ZfinMutationRecord } from "./zfin-mutation-record";
-import { WINSTON_MODULE_NEST_PROVIDER } from "nest-winston";
-import { ConfigService } from "@nestjs/config";
+import {Inject, Injectable, Logger} from '@nestjs/common';
+import {HttpService} from '@nestjs/axios';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { Mutation } from './mutation.entity';
+import { ZfinMutationRecord } from './zfin-mutation-record';
+import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class MutationService {
@@ -15,7 +16,7 @@ export class MutationService {
     private readonly logger: Logger,
     @InjectRepository(Mutation)
     private readonly repo: Repository<Mutation>,
-    private readonly httpService: HttpService,
+    private readonly httpService: HttpService
   ) {}
 
   findByAlleleName(alleleName: string) {
@@ -23,12 +24,8 @@ export class MutationService {
   }
 
   async loadFromZfin(): Promise<any> {
-    if (!this.configService.get('ALLOW_LOADING_VIA_API')) {
-      this.logger.log(`Attempt to load mutation data using the API when that function is disabled.`);
-      return 'Disabled';
-    }
-    this.logger.log(`Starting mutation load from ${this.configService.get("ZFIN_MUTATION_URL")}`);
-    this.httpService.get(this.configService.get("ZFIN_MUTATION_URL")).subscribe(async (response) => {
+    this.logger.log(`Starting mutation load from ${this.configService.get('ZFIN_MUTATION_URL')}`);
+    this.httpService.get(this.configService.get('ZFIN_MUTATION_URL')).subscribe(async (response) => {
 
       // records are separated by \n so split them up
       const records: string[] = response.data.split('\n');
@@ -47,29 +44,28 @@ export class MutationService {
       await this.repo.createQueryBuilder()
         .delete()
         .from(Mutation)
-        .where("1")
+        .where('1')
         .execute();
 
-      // the INSERT query can get huge so we do a limited number of lines at a time
-      const count = 0;
+      // the INSERT query can get huge, so we do a limited number of lines at a time
       let inserts: Mutation[] = [];
       for (let i = 0; i < mutations.length; i++) {
         inserts.push(mutations[i]);
-        if (inserts.length === Number(this.configService.get("RECORDS_PER_INSERT"))) {
+        if (inserts.length === Number(this.configService.get('RECORDS_PER_INSERT'))) {
           await this.insert(inserts);
           inserts = [];
         }
       }
       // do the remainder.
       await this.insert(inserts);
-      this.logger.log(`Done mutation load from ${this.configService.get("ZFIN_MUTATION_URL")}`);
+      this.logger.log(`Done mutation load from ${this.configService.get('ZFIN_MUTATION_URL')}`);
 
     });
     return 'Triggered mutation loading from ZFIN';
   }
 
   async insert(mutations: Mutation[]): Promise<boolean> {
-    const result = await this.repo.createQueryBuilder()
+    await this.repo.createQueryBuilder()
       .insert()
       .into(Mutation)
       .orIgnore()

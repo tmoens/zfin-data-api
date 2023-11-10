@@ -1,15 +1,14 @@
-import { HttpModule, Module } from "@nestjs/common";
+import {Module} from '@nestjs/common';
+import {HttpModule} from '@nestjs/axios';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { ConfigModule, ConfigService } from "@nestjs/config";
-import { TransgeneModule } from "./transgene/transgene.module";
-import { TypeOrmModule } from "@nestjs/typeorm";
-import { Transgene } from "./transgene/transgene.entity";
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { TransgeneModule } from './transgene/transgene.module';
+import { TypeOrmModule } from '@nestjs/typeorm';
 import { MutationModule } from './mutation/mutation.module';
-import { Mutation } from "./mutation/mutation.entity";
 
-import * as winston from "winston";
-import * as DailyRotateFile from "winston-daily-rotate-file";
+import * as winston from 'winston';
+import * as DailyRotateFile from 'winston-daily-rotate-file';
 import {utilities as nestWinstonModuleUtilities, WinstonModule} from 'nest-winston';
 
 const rotatingFileLog = new DailyRotateFile({
@@ -30,13 +29,16 @@ const consoleLog = new (winston.transports.Console)({
 
 @Module({
   imports: [
+    HttpModule,
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: ['.env', '.development.env'],
     }),
 
     TypeOrmModule.forRootAsync({
-      imports: [ConfigModule],
+      imports: [
+        ConfigModule,
+      ],
       useFactory: (configService: ConfigService) => ({
         type: 'mysql',
         host: 'localhost',

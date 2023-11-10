@@ -3,16 +3,19 @@
 This is a a single purpose stop-gap API application.
 
 ### Problem:
-The wonderful site [ZFIN](www.zfin.org) provides a user interface that allows
+The wonderful site [ZFIN](https://zfin.org) provides a user interface that 
+allows
 zebrafish researcher to peruse a wealth of zebrafish genetics information.
 
-Of the many classes of objects available there, there are two Mutations and Transgnes
+Of the many classes of objects available there, there are two Mutations and 
+Transgenes
 which are known to the research community by an abbreviated name which is loosely
-refered to as an allele. To all intents and purposes, the allele is a human friendly identifier
+referred to as an allele. To all intents and purposes, the allele is a human 
+friendly identifier
 for a mutation or a transgene.  The formal ZFIN identifier is not human friendly,
 but it is the key by which other systems know a particular mutation or transgene.
 
-A particular system exists that frequently needs to resolve from an allele name to a
+A particular system exists that frequently needs to resolve from an allele name
 to a ZFIN_Id.
 The only way to do this is to have the user manually go to ZFIN, type in the allele name, copy the
 ZFIN_Id and paste it into the other system. 
@@ -94,11 +97,58 @@ to avoid repeatedly downloading the large ZFIN files.
 
 ### API Server
 Run the API as a service to ensure some resilience over restarts.
-For example, using systemd on Linux. 
+For example, using systemd on Linux. Here is a sample .service file:
 
-###Loader
+```shell
+[Unit]
+Description=ZFIN Data API Service
+After=network.target mysql.service
+[Service]
+ExecStart=/usr/bin/node /var/www/zfin-data-api/live/zfin-data-api/dist/main.js
+Restart=always
+User=the_user_you_want_running_the_service
+Group=that_users_group
+Environment=PATH=/usr/bin:/usr/local/bin
+Environment=NODE_ENV=production
+WorkingDirectory=/var/www/zfin-data-api/live/zfin-data-api
+[Install]
+WantedBy=multi-user.target
+```
+
+### Loader
 You can run the loader regularly by making both a service and a timer
 for the loader program under systemd.
+
+```shell
+# example service
+[Unit]
+Description=ZFIN Data Loader Service
+Wants=zfin-data-loader.timer
+After=network.target mysql.service
+[Service]
+ExecStart=/usr/bin/node /var/www/zfin-data-api/live/zfin-data-api/dist/loader.js
+User=the_user_you_want_running_the_service
+Group=that_users_group
+Environment=PATH=/usr/bin:/usr/local/bin
+Environment=NODE_ENV=production
+WorkingDirectory=/var/www/zfin-data-api/live/zfin-data-api
+[Install]
+WantedBy=multi-user.target
+```
+
+```shell
+# example timer
+# /etc/systemd/system/zfin-data-loader.timer
+[Unit]
+Description=Run zfin-data-loader every day
+Requires=zfin-data-loader.service
+[Timer]
+Unit=zfin-data-loader.service
+OnCalendar=*-*-* 11:00:00
+Persistent=true
+[Install]
+WantedBy=timers.target
+```
 
 ### Web Access to API
 
