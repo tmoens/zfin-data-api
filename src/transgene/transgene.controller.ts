@@ -1,7 +1,7 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Inject, Logger } from "@nestjs/common";
+import { Controller, Get, Param, Inject, Logger } from '@nestjs/common';
 import { TransgeneService } from './transgene.service';
-import { ConfigService } from "@nestjs/config";
-import { WINSTON_MODULE_NEST_PROVIDER } from "nest-winston";
+import { ConfigService } from '@nestjs/config';
+import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
 
 @Controller('transgene')
 export class TransgeneController {

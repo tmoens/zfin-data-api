@@ -1,11 +1,11 @@
-import { HttpService, Inject, Injectable, Logger } from "@nestjs/common";
-import { InjectRepository } from "@nestjs/typeorm";
-import { Mutation } from "../mutation/mutation.entity";
-import { Repository } from "typeorm";
-import { Transgene } from "./transgene.entity";
-import { ZfinTransgeneRecord } from "./zfin-transgene-record";
-import { WINSTON_MODULE_NEST_PROVIDER } from "nest-winston";
-import { ConfigService } from "@nestjs/config";
+import { Inject, Injectable, Logger } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { Transgene } from './transgene.entity';
+import { ZfinTransgeneRecord } from './zfin-transgene-record';
+import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
+import { ConfigService } from '@nestjs/config';
+import {HttpService} from '@nestjs/axios';
 
 @Injectable()
 export class TransgeneService {
@@ -24,19 +24,19 @@ export class TransgeneService {
   }
 
   /**
-   * - get a file of transgens from ZFIN
+   * - get a file of transgenes from ZFIN
    */
-  async loadFromZfin(): Promise<any> {
-    this.logger.log(`Starting transgene load from ${this.configService.get("ZFIN_TRANSGENE_URL")}`);
+  async loadFromZfin(): Promise<string> {
+    this.logger.log(`Starting transgene load from ${this.configService.get('ZFIN_TRANSGENE_URL')}`);
 
     // get the transgenes from ZFIN
-    this.httpService.get(this.configService.get("ZFIN_TRANSGENE_URL"))
+    this.httpService.get(this.configService.get('ZFIN_TRANSGENE_URL'))
       .subscribe(async (response) => {
 
         // records are separated by \n so split them up
         const records: string[] = response.data.split('\n');
 
-        // Convert records first into ZfinTransgenRecords which mirror the file content exactly.
+        // Convert records first into ZfinTransgeneRecords which mirror the file content exactly.
         // Turns out some transgenes are sort of mutation.  For those, there are
         // two records in the tgInsertions file.  One for the tg construct
         // and one for the mutated gene.  Ignore the line for the gene
@@ -53,28 +53,27 @@ export class TransgeneService {
         await this.repo.createQueryBuilder()
           .delete()
           .from(Transgene)
-          .where("1")
+          .where('1')
           .execute();
 
-        // the INSERT query can get huge so we do a limited number of lines at a time
-        const count = 0;
+        // the INSERT query can get huge, so we do a limited number of lines at a time
         let inserts: Transgene[] = [];
         for (let i = 0; i < transgenes.length; i++) {
           inserts.push(transgenes[i]);
-          if (inserts.length === Number(this.configService.get("RECORDS_PER_INSERT"))) {
+          if (inserts.length === Number(this.configService.get('RECORDS_PER_INSERT'))) {
             await this.insert(inserts);
             inserts = [];
           }
         }
         // do the remainder.
         await this.insert(inserts);
-        this.logger.log(`Done transgene load from ${this.configService.get("ZFIN_TRANSGENE_URL")}`);
+        this.logger.log(`Done transgene load from ${this.configService.get('ZFIN_TRANSGENE_URL')}`);
       });
     return 'Loading triggered.';
   };
 
   async insert(tgs: Transgene[]): Promise<boolean> {
-    const result = await this.repo.createQueryBuilder()
+    await this.repo.createQueryBuilder()
       .insert()
       .into(Transgene)
       .orIgnore()

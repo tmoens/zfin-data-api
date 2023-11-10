@@ -1,6 +1,5 @@
-import { Injectable } from "@nestjs/common";
-import { Observable, of } from "rxjs";
-import { ConfigService } from "@nestjs/config";
+import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class AppService {

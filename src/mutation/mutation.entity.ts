@@ -1,5 +1,4 @@
-import { Column, Entity, PrimaryColumn } from "typeorm";
-import { generateInput } from "@nestjs/cli/lib/questions/questions";
+import { Column, Entity, PrimaryColumn } from 'typeorm';
 
 @Entity()
 export class Mutation {
@@ -15,7 +14,7 @@ export class Mutation {
   alleleName: string;
 
   @Column({
-    comment: 'ZFIN calls this the "Gene Symvol". Users are familiar with this.',
+    comment: 'ZFIN calls this the "Gene Symbol". Users are familiar with this.',
   })
   geneName: string;
 
