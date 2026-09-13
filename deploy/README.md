@@ -116,13 +116,18 @@ The units run from `current`, so rolling back is repointing it and restarting �
 is still there, complete, needing no rebuild and no network.
 
 This folder holds no secrets (those are in `/etc/zfin-data-api`), so it does not need tight
-permissions. Let a deploy group write it, and nothing is owned by an individual:
+permissions:
 
 ```bash
-sudo groupadd -f deploy
-sudo usermod -aG deploy <each-deployer>
-sudo install -d -o root -g deploy -m 2775 /srv/zfin-data-api
+sudo install -d -o root -g root -m 755 /srv/zfin-data-api
 ```
+
+Root owns and writes it — `install-release.sh` runs under sudo — and the runtime account reads it as
+*other*. Nothing here is owned by a person, so a second deployer needs no change.
+
+The day a deployer exists who is **not** root — realistically an automated one — give the directory
+a group and add them to it, alongside a narrow `sudo systemctl restart` rule. Until then a group
+would grant nothing that sudo does not already.
 
 The target has no checkout, so the install script has to be put there once — it is an administrative
 tool, so it goes where those live:

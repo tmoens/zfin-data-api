@@ -35,7 +35,7 @@ id "$RUNTIME_USER" >/dev/null 2>&1 || echo "warning: RUNTIME_USER ($RUNTIME_USER
 # to read it. Both are easy to get wrong and neither shows up until the service fails to start.
 if [ -d "$APP_DIR" ] && [ -e "$APP_DIR/current" ] \
    && ! sudo -u "$RUNTIME_USER" test -r "$APP_DIR/current/dist/main.js" 2>/dev/null; then
-  echo "warning: $RUNTIME_USER cannot read $APP_DIR/current/dist/main.js — check the mode on $APP_DIR (expected -g deploy -m 2775, world-readable)." >&2
+  echo "warning: $RUNTIME_USER cannot read $APP_DIR/current/dist/main.js — check the mode on $APP_DIR (expected 755, world-readable)." >&2
 fi
 
 # The port the unit serves and the port the app binds are set in two different files; a mismatch
