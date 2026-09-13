@@ -18,7 +18,7 @@
 #
 # It needs a real password: sudo authenticates against the password field, so an account created
 # with --disabled-password is in the sudo group and still cannot sudo.
-SERVICE_USER=tsw-admin
+SERVICE_USER=zsm-admin
 
 # RUNTIME identity. What the API and loader processes actually run as. A system account: no
 # password, no shell, no sudo, no home. It needs exactly four things — read the checkout, read
@@ -29,19 +29,19 @@ SERVICE_USER=tsw-admin
 # reasoning as the per-facility database users: a compromise should reach one service's credentials,
 # not every service's. When the facility servers land here they each get their own, all sharing a
 # group that can read the one shared checkout.
-RUNTIME_USER=tsw
+RUNTIME_USER=zsm
 
 # ---------------------------------------------------------------------------
 
 # The code checkout root — also the systemd WorkingDirectory for both units.
 #
 # /srv, NOT a home directory. The runtime account has to read this tree, and a home directory is
-# 0750 to its owner — `tsw` simply cannot traverse into /home/tsw-admin. That alone settles it; the
+# 0750 to its owner — `zsm` simply cannot traverse into /home/zsm-admin. That alone settles it; the
 # units additionally set ProtectHome=yes, which hides /home from them altogether.
 #
 # Owned by the deploy user, group-readable by the runtime user, setgid so that a fresh `npm ci`
 # keeps the group on everything it writes:
-#     sudo install -d -o tsw-admin -g tsw -m 2750 /srv/zfin-data-api
+#     sudo install -d -o zsm-admin -g zsm -m 2750 /srv/zfin-data-api
 APP_DIR=/srv/zfin-data-api
 
 # Absolute path to the Node binary (systemd has no nvm or PATH). Node 20+ is required by NestJS 11.
@@ -58,7 +58,10 @@ NODE_BIN=/usr/bin/node
 #
 # FOR A STAGED CUTOVER, point a temporary name here first (e.g. zfin2.zebrafishfacilitymanager.com),
 # verify against the live do1 service, then re-render with the real name once DNS moves.
-SITE_ADDRESS=zfin.zebrafishfacilitymanager.com
+# Start on the STAGING name. zfin.zebrafishfacilitymanager.com still resolves to do1 and keeps
+# serving from there; pointing this at it before cutover just has Caddy chase a certificate for a
+# host that answers somewhere else. Change to the real name at step 10, once the two agree.
+SITE_ADDRESS=zfin2.zebrafishfacilitymanager.com
 
 # The localhost port the API listens on. Must match PORT in /etc/zfin-data-api/zfin-data-api.env.
 # do2 already runs dg-tour on 3478 (api) and 3479 (ingestor).

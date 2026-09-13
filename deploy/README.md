@@ -107,7 +107,7 @@ file, opening a port and reaching MySQL — and nothing else. Giving both jobs t
 the Node process runs as a member of the sudo group, which lets anyone who compromises it wait for a
 password rather than needing one.
 
-| | `tsw-admin` | `tsw` |
+| | `zsm-admin` | `zsm` |
 |---|---|---|
 | Role | deploy / operate | run the services |
 | Shell | yes | none (`nologin`) |
@@ -124,12 +124,12 @@ one shared checkout.
 ```bash
 # Deploy account. A real password: sudo authenticates against the password field, so
 # --disabled-password would leave it in the sudo group and still unable to sudo.
-sudo adduser --gecos "" tsw-admin
-sudo usermod -aG sudo tsw-admin
-sudo passwd -S tsw-admin            # expect P (usable), not L (locked)
+sudo adduser --gecos "" zsm-admin
+sudo usermod -aG sudo zsm-admin
+sudo passwd -S zsm-admin            # expect P (usable), not L (locked)
 
 # Runtime account. A system account: no password, no shell, no home, never logged into.
-sudo adduser --system --group --no-create-home --shell /usr/sbin/nologin tsw
+sudo adduser --system --group --no-create-home --shell /usr/sbin/nologin zsm
 ```
 
 ### Node goes in /usr, not under nvm
@@ -141,7 +141,7 @@ node -v && command -v node        # expect v24.x at /usr/bin/node
 ```
 
 do1 and dg-tour both put an absolute `~/.nvm/versions/node/...` path in `ExecStart`. That cannot work
-here: `tsw` cannot read another user's home (`0750`), and the units set `ProtectHome=yes`, which hides
+here: `zsm` cannot read another user's home (`0750`), and the units set `ProtectHome=yes`, which hides
 `/home` from them regardless. A system Node also means the version that builds the code is the version
 that runs it, and a deploy stops depending on whose nvm is current.
 
@@ -150,20 +150,20 @@ that runs it, and a deploy stops depending on whose nvm is current.
 ```bash
 # owner deploys, runtime group reads, nobody else sees it. The setgid bit (2) is what makes
 # `npm ci` keep the group on the node_modules tree it replaces.
-sudo install -d -o tsw-admin -g tsw -m 2750 /srv/zfin-data-api
+sudo install -d -o zsm-admin -g zsm -m 2750 /srv/zfin-data-api
 
-sudo -u tsw-admin -i
+sudo -u zsm-admin -i
   git clone https://github.com/tmoens/zfin-data-api.git /srv/zfin-data-api
   cd /srv/zfin-data-api && git checkout update
   npm ci && npm run build
   exit
 
 # prove the runtime account can actually read the build — the units cannot start otherwise
-sudo -u tsw test -r /srv/zfin-data-api/dist/main.js && echo "tsw can read the build"
+sudo -u zsm test -r /srv/zfin-data-api/dist/main.js && echo "zsm can read the build"
 ```
 
-`/srv` rather than a home directory for the reason in the table: `tsw` cannot traverse into
-`/home/tsw-admin`. The service also needs no write access anywhere — logs go to journald and all
+`/srv` rather than a home directory for the reason in the table: `zsm` cannot traverse into
+`/home/zsm-admin`. The service also needs no write access anywhere — logs go to journald and all
 state is in MySQL — so the units mount the whole filesystem read-only.
 
 ### What the units do beyond changing user
@@ -203,9 +203,9 @@ sudo cp /srv/zfin-data-api/environments/sample.env /etc/zfin-data-api/zfin-data-
 sudo vi /etc/zfin-data-api/zfin-data-api.env     # DB_*, PORT, PUBLIC_URL, ZFIN_*_URL
 
 # root writes it (you edit with sudo); the runtime account reads it; nobody else can.
-sudo chown root:tsw /etc/zfin-data-api/zfin-data-api.env
+sudo chown root:zsm /etc/zfin-data-api/zfin-data-api.env
 sudo chmod 640      /etc/zfin-data-api/zfin-data-api.env
-sudo -u tsw test -r /etc/zfin-data-api/zfin-data-api.env && echo "tsw can read its config"
+sudo -u zsm test -r /etc/zfin-data-api/zfin-data-api.env && echo "zsm can read its config"
 ```
 
 `chmod 600` is not ceremony: the do1 file was `-rw-r--r--`, so the database password was readable
@@ -267,7 +267,7 @@ Point a temporary name (e.g. `zfin2.zebrafishfacilitymanager.com`) at do2 first 
 the live do1 service before moving DNS:
 
 ```bash
-# on do2 — the oneshot unit runs as tsw-admin with the right config already
+# on do2 — the oneshot unit runs as zsm-admin with the right config already
 curl -s localhost:3480/health
 sudo systemctl start zfin-data-loader && journalctl -u zfin-data-loader -n 20 --no-pager
 
@@ -307,7 +307,7 @@ processes run normally and report nothing.
 ## Deploying a new version
 
 ```bash
-sudo -u tsw-admin -i
+sudo -u zsm-admin -i
 cd /srv/zfin-data-api && git pull && npm ci && npm run build
 exit
 # apply any new migrations on the admin plane (see step 4), then:
