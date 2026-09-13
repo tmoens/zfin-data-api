@@ -101,8 +101,8 @@ Node also means the version that builds the code is the version that runs it.
 The target never builds anything. It receives a finished artifact, so it needs no git, no npm and no
 compiler — only the Node runtime installed above.
 
-`deploy/install-release.sh` keeps several installed versions side by side, with a `current` shortcut
-pointing at whichever should be running:
+`deploy/zfin-data-api-deploy` keeps several installed versions side by side, with a `current`
+shortcut pointing at whichever should be running:
 
 ```
 /srv/zfin-data-api/
@@ -123,7 +123,7 @@ permissions:
 sudo install -d -o root -g root -m 755 /srv/zfin-data-api
 ```
 
-Root owns and writes it — `install-release.sh` runs under sudo — and the runtime account reads it as
+Root owns and writes it — the deploy tool runs under sudo — and the runtime account reads it as
 *other*. Nothing here is owned by a person, so a second deployer needs no change.
 
 The day a deployer exists who is **not** root — realistically an automated one — give the directory
@@ -134,15 +134,12 @@ The target has no checkout, so the install script has to be put there once — i
 tool, so it goes where those live:
 
 ```bash
-scp deploy/install-release.sh <target>:/tmp/
+scp deploy/zfin-data-api-deploy <target>:/tmp/
 
 # `install src dst` copies a file. This lands in /usr/local/sbin, where admin tools live —
-# not under the release directory. It is the tool, not a release.
-#
-# Install it under a name carrying the application. There will be one of these per service, and
-# a generic `install-release` in a shared directory says nothing about which; extensionless,
-# as tools there conventionally are.
-ssh <target> 'sudo install -o root -g root -m 755 /tmp/install-release.sh /usr/local/sbin/zfin-data-api-deploy'
+# not under the release directory. It is the tool, not a release. A trailing slash on the
+# destination keeps the name it already has.
+ssh <target> 'sudo install -o root -g root -m 755 /tmp/zfin-data-api-deploy /usr/local/sbin/'
 ```
 
 Copy it again whenever it changes; it is versioned in this repository alongside the units.
