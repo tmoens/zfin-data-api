@@ -5,11 +5,17 @@
     "removeComments": true,
     "emitDecoratorMetadata": true,
     "experimentalDecorators": true,
-    "allowSyntheticDefaultImports": true,
     "target": "es2017",
+    // Skip type-checking of dependency .d.ts files (TS-team-recommended for app builds; the Nest
+    // starter default). Required once eslint 10 began shipping its own types, which otherwise clash
+    // with webpack's transitive @types/eslint-scope during `nest build`.
+    "skipLibCheck": true,
     "sourceMap": true,
     "outDir": "./dist",
     "baseUrl": "./",
-    "incremental": true
-  }
+    "incremental": true,
+    "allowSyntheticDefaultImports": true
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist"]
 }

@@ -37,7 +37,7 @@
 // Protein Consequence Position End
 // Protein Reference Sequence
 
-import { Mutation } from "./mutation.entity";
+import { Mutation } from './mutation.entity';
 
 export class ZfinMutationRecord {
   constructor(
@@ -73,12 +73,37 @@ export class ZfinMutationRecord {
     private aminoAcidsRemoved?: string,
     private proteinConsequencePositionStart?: string,
     private proteinConsequencePositionEnd?: string,
-    private proteinReferenceSequence?: string
-  ) {
-  }
+    private proteinReferenceSequence?: string,
+  ) {}
 
   isDeficiencyOrTranslocation(): boolean {
-    return this.featureType === "TRANSLOC" || this.featureType === "DEFICIENCY";
+    return this.featureType === 'TRANSLOC' || this.featureType === 'DEFICIENCY';
+  }
+
+  /**
+   * Is this line something we can store?
+   *
+   * Two things are being rejected here. The obvious one is deficiencies and translocations, which
+   * are in the file but are not the kind of mutation this API answers for.
+   *
+   * The other is any line whose first field is not a ZFIN identifier. On today's file that rejects
+   * exactly one thing: the empty string left by the trailing newline, which the old code turned
+   * into a Mutation with no id and no allele name and handed to an INSERT IGNORE.
+   *
+   * Otherwise it is DEFENSIVE, and deliberately so — checked against the live download, it keeps
+   * precisely the same rows the old `!isDeficiencyOrTranslocation()` filter kept. Its real job is
+   * to let the services tell "nothing parsed" apart from "the dataset is empty": an HTML error page
+   * served with a 200 produces no ZDB- lines at all, so it is recognisable instead of being written
+   * over real data. The file carries no header row today; if ZFIN ever adds one, this rejects that
+   * too.
+   */
+  isLoadable(): boolean {
+    return (
+      !!this.genomicFeatureId &&
+      this.genomicFeatureId.startsWith('ZDB-') &&
+      !!this.genomicFeatureAbbreviation &&
+      !this.isDeficiencyOrTranslocation()
+    );
   }
 
   convertToMutation(): Mutation {
@@ -88,7 +113,7 @@ export class ZfinMutationRecord {
       this.geneSymbol,
       this.geneID,
       this.featureType,
-      this.transcriptConsequence
+      this.transcriptConsequence,
     );
   }
 }

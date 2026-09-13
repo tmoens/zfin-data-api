@@ -3,13 +3,7 @@
 /node_modules
 
 # Logs
-/log
-logs
-*.log
 npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-lerna-debug.log*
 
 # OS
 .DS_Store
@@ -34,5 +28,13 @@ lerna-debug.log*
 !.vscode/launch.json
 !.vscode/extensions.json
 
-# .env
-.env
+# Deployment configuration holds secrets and is host-specific. In production it lives in
+# /etc/zfin-data-api/ and never appears here at all; in development it is your own copy.
+# Only the documented sample is tracked.
+/environments/*
+!/environments/sample.env
+/.env
+
+# Host-specific deploy values + whatever render-config.sh produced from them.
+/deploy/deploy.conf
+/deploy/.rendered

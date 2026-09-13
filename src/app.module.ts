@@ -1,70 +1,44 @@
-import {Module} from '@nestjs/common';
-import {HttpModule} from '@nestjs/axios';
+import { HttpModule } from '@nestjs/axios';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
+import { APP_FILTER } from '@nestjs/core';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { SentryGlobalFilter, SentryModule } from '@sentry/nestjs/setup';
+
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { ConfigModule, ConfigService } from '@nestjs/config';
-import { TransgeneModule } from './transgene/transgene.module';
-import { TypeOrmModule } from '@nestjs/typeorm';
+import { ConfigModule } from './config/config.module';
+import { TypeOrmConfigFactory } from './config/typeorm-config.factory';
+import { HealthController } from './health.controller';
+import { LoggingMiddleware } from './middleware/logging.middleware';
+import { MutationController } from './mutation/mutation.controller';
 import { MutationModule } from './mutation/mutation.module';
-
-import * as winston from 'winston';
-import * as DailyRotateFile from 'winston-daily-rotate-file';
-import {utilities as nestWinstonModuleUtilities, WinstonModule} from 'nest-winston';
-
-const rotatingFileLog = new DailyRotateFile({
-  filename: 'zf-%DATE%.log',
-  datePattern: 'YYYY-MM-DD-HH',
-  dirname: 'log',
-  zippedArchive: true,
-  maxSize: '20m',
-  maxFiles: '14d'
-});
-
-const consoleLog = new (winston.transports.Console)({
-  format: winston.format.combine(
-    winston.format.timestamp(),
-    nestWinstonModuleUtilities.format.nestLike(),
-  ),
-});
+import { TransgeneController } from './transgene/transgene.controller';
+import { TransgeneModule } from './transgene/transgene.module';
 
 @Module({
   imports: [
+    // Error tracking: catches unhandled exceptions app-wide (no-op without a SENTRY_DSN).
+    SentryModule.forRoot(),
+    ConfigModule,
     HttpModule,
-    ConfigModule.forRoot({
-      isGlobal: true,
-      envFilePath: ['.env', '.development.env'],
-    }),
-
     TypeOrmModule.forRootAsync({
-      imports: [
-        ConfigModule,
-      ],
-      useFactory: (configService: ConfigService) => ({
-        type: 'mysql',
-        host: 'localhost',
-        port: 3306,
-        username: configService.get('DATABASE_USER'),
-        password: configService.get('DATABASE_PASSWORD'),
-        database: configService.get('DATABASE_NAME'),
-        entities: [__dirname + '/**/*.entity{.ts,.js}'],
-        synchronize: true,
-      }),
-      inject: [ConfigService],
+      imports: [ConfigModule],
+      useClass: TypeOrmConfigFactory,
     }),
-
-    WinstonModule.forRoot({
-      transports: [
-        consoleLog,
-        rotatingFileLog,
-      ],
-      // other options
-    }),
-    TransgeneModule,
     MutationModule,
+    TransgeneModule,
   ],
-  controllers: [AppController],
-  providers: [AppService],
+  controllers: [AppController, HealthController],
+  providers: [
+    // First filter so Sentry sees exceptions before any other handling.
+    { provide: APP_FILTER, useClass: SentryGlobalFilter },
+    AppService,
+  ],
 })
-
-export class AppModule {}
-
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer
+      .apply(LoggingMiddleware)
+      .forRoutes(MutationController, TransgeneController);
+  }
+}

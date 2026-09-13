@@ -1,22 +1,24 @@
-import { Controller, Get, Param, Inject, Logger } from '@nestjs/common';
+import { Controller, Get, Logger, Param } from '@nestjs/common';
+
+import { ConfigService } from '../config/config.service';
 import { TransgeneService } from './transgene.service';
-import { ConfigService } from '@nestjs/config';
-import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
 
 @Controller('transgene')
 export class TransgeneController {
-  constructor(
-    private configService: ConfigService,
-    @Inject(WINSTON_MODULE_NEST_PROVIDER)
-    private readonly logger: Logger,
-    private readonly transgeneService: TransgeneService,
-    ) {}
+  private readonly logger = new Logger(TransgeneController.name);
 
-  // trigger loading from zfin - for testing
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly transgeneService: TransgeneService,
+  ) {}
+
+  // See MutationController.loadFromZfin.
   @Get('loadFromZfin')
-  async loadFromZfin(): Promise<any> {
-    if (!(this.configService.get('ALLOW_LOADING_VIA_API') === 'true')) {
-      this.logger.log(`Attempt to load transgene data using the API when that function is disabled.`);
+  async loadFromZfin(): Promise<string> {
+    if (!this.configService.allowLoadingViaApi) {
+      this.logger.warn(
+        'Attempt to load transgene data using the API when that function is disabled.',
+      );
       return 'Disabled';
     }
     return this.transgeneService.loadFromZfin();

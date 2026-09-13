@@ -1,22 +1,25 @@
-import { Controller, Get, Param, Inject, Logger } from '@nestjs/common';
+import { Controller, Get, Logger, Param } from '@nestjs/common';
+
+import { ConfigService } from '../config/config.service';
 import { MutationService } from './mutation.service';
-import { ConfigService } from '@nestjs/config';
-import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
 
 @Controller('mutation')
 export class MutationController {
+  private readonly logger = new Logger(MutationController.name);
+
   constructor(
-    private configService: ConfigService,
-    @Inject(WINSTON_MODULE_NEST_PROVIDER)
-    private readonly logger: Logger,
+    private readonly configService: ConfigService,
     private readonly mutationService: MutationService,
   ) {}
 
-  // trigger loading from zfin - for testing
+  // Trigger loading from ZFIN — for development. Off unless the deployment env says otherwise,
+  // because the route has no authentication: see ALLOW_LOADING_VIA_API in the config schema.
   @Get('loadFromZfin')
-  async loadFromZfin(): Promise<any> {
-    if (!(this.configService.get('ALLOW_LOADING_VIA_API') === 'true')) {
-      this.logger.log(`Attempt to load mutation data using the API when that function is disabled.`);
+  async loadFromZfin(): Promise<string> {
+    if (!this.configService.allowLoadingViaApi) {
+      this.logger.warn(
+        'Attempt to load mutation data using the API when that function is disabled.',
+      );
       return 'Disabled';
     }
     return this.mutationService.loadFromZfin();
@@ -27,4 +30,3 @@ export class MutationController {
     return this.mutationService.findByAlleleName(alleleName);
   }
 }
-

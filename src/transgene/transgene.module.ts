@@ -1,16 +1,14 @@
+import { HttpModule } from '@nestjs/axios';
 import { Module } from '@nestjs/common';
-import { TransgeneService } from './transgene.service';
-import { TransgeneController } from './transgene.controller';
 import { TypeOrmModule } from '@nestjs/typeorm';
+
+import { TransgeneController } from './transgene.controller';
 import { Transgene } from './transgene.entity';
-import {HttpModule} from '@nestjs/axios';
+import { TransgeneService } from './transgene.service';
 
 @Module({
-  imports:[
-    HttpModule,
-    TypeOrmModule.forFeature([Transgene]),
-  ],
+  imports: [HttpModule, TypeOrmModule.forFeature([Transgene])],
   controllers: [TransgeneController],
-  providers: [TransgeneService]
+  providers: [TransgeneService],
 })
 export class TransgeneModule {}
