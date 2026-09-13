@@ -194,13 +194,20 @@ hard-code it.
 One file, read by both the server and the loader, living outside the checkout so that a `git pull`
 deploy structurally cannot touch it.
 
-```bash
-sudo cp /srv/zfin-data-api/environments/sample.env /etc/zfin-data-api/zfin-data-api.env
-sudo vi /etc/zfin-data-api/zfin-data-api.env      # DB_*, PORT, PUBLIC_URL, ZFIN_*_URL
+The annotated sample lives in the repository, so it comes from there — the target has no checkout,
+and a release artifact carries only `dist`, `node_modules` and the package files.
 
-# root writes it (you edit with sudo); the runtime account reads it; nobody else can.
-sudo chown root:zfin-api /etc/zfin-data-api/zfin-data-api.env
-sudo chmod 640           /etc/zfin-data-api/zfin-data-api.env
+```bash
+# from the repository, on your workstation
+scp environments/sample.env <target>:/tmp/
+```
+
+```bash
+# on the target. root writes it (you edit with sudo); the runtime account reads it; nobody else can.
+sudo install -o root -g zfin-api -m 640 /tmp/sample.env /etc/zfin-data-api/zfin-data-api.env
+rm /tmp/sample.env
+
+sudo vi /etc/zfin-data-api/zfin-data-api.env      # DB_*, PORT, PUBLIC_URL, ZFIN_*_URL
 sudo -u zfin-api test -r /etc/zfin-data-api/zfin-data-api.env && echo "runtime account can read it"
 ```
 
