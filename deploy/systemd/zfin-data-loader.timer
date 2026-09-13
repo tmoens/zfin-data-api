@@ -4,13 +4,11 @@ Requires=zfin-data-loader.service
 
 [Timer]
 Unit=zfin-data-loader.service
-# 11:00 UTC. Chosen to fall outside working hours at the facilities that use this API, and well
-# after ZFIN's own nightly publish. Adjust to suit where your users are.
+# 11:00 UTC. Outside working hours at the facilities that use this API, and after ZFIN publishes.
 OnCalendar=*-*-* 11:00:00
-# Run on next boot if the machine was down when the timer was due, rather than skipping a day.
+# Run on next boot if the machine was down when it was due, rather than skipping a day.
 Persistent=true
-# Spread the start over a few minutes so this is not hitting zfin.org at exactly the same second
-# as every other consumer with a round-numbered schedule.
+# Avoid hitting zfin.org at the same second as every other round-numbered schedule.
 RandomizedDelaySec=300
 
 [Install]
