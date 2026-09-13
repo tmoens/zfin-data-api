@@ -25,14 +25,17 @@ out="$here/.rendered"
 # shellcheck disable=SC1090
 set -a; source "$conf"; set +a
 
-: "${SERVICE_USER:?set in deploy.conf}" "${RUNTIME_USER:?set in deploy.conf}" \
-  "${APP_DIR:?set in deploy.conf}" "${NODE_BIN:?set in deploy.conf}" \
-  "${SITE_ADDRESS:?set in deploy.conf}" "${APP_PORT:?set in deploy.conf}"
+: "${RUNTIME_USER:?set in deploy.conf}" "${APP_DIR:?set in deploy.conf}" \
+  "${NODE_BIN:?set in deploy.conf}" "${SITE_ADDRESS:?set in deploy.conf}" \
+  "${APP_PORT:?set in deploy.conf}"
 
 [ -x "$NODE_BIN" ] || echo "warning: NODE_BIN ($NODE_BIN) is not executable on this host." >&2
 id "$RUNTIME_USER" >/dev/null 2>&1 || echo "warning: RUNTIME_USER ($RUNTIME_USER) does not exist yet — the units will fail to start until it does." >&2
-if [ -d "$APP_DIR" ] && ! sudo -u "$RUNTIME_USER" test -r "$APP_DIR/dist/main.js" 2>/dev/null; then
-  echo "warning: $RUNTIME_USER cannot read $APP_DIR/dist/main.js — check the group and mode on $APP_DIR (expected -o $SERVICE_USER -g $RUNTIME_USER -m 2750)." >&2
+# A release has to be installed before the units can start, and the runtime account has to be able
+# to read it. Both are easy to get wrong and neither shows up until the service fails to start.
+if [ -d "$APP_DIR" ] && [ -e "$APP_DIR/current" ] \
+   && ! sudo -u "$RUNTIME_USER" test -r "$APP_DIR/current/dist/main.js" 2>/dev/null; then
+  echo "warning: $RUNTIME_USER cannot read $APP_DIR/current/dist/main.js — check the mode on $APP_DIR (expected -g deploy -m 2775, world-readable)." >&2
 fi
 
 # The port the unit serves and the port the app binds are set in two different files; a mismatch
@@ -50,8 +53,7 @@ fi
 mkdir -p "$out"
 render() {
   # sed, not envsubst, to stay dependency-free. '|' delimiter since values contain '/'.
-  sed -e "s|\${SERVICE_USER}|${SERVICE_USER}|g" \
-      -e "s|\${RUNTIME_USER}|${RUNTIME_USER}|g" \
+  sed -e "s|\${RUNTIME_USER}|${RUNTIME_USER}|g" \
       -e "s|\${APP_DIR}|${APP_DIR}|g" \
       -e "s|\${NODE_BIN}|${NODE_BIN}|g" \
       -e "s|\${SITE_ADDRESS}|${SITE_ADDRESS}|g" \

@@ -57,41 +57,34 @@ split appears again in the operating-system accounts at step 2.
 
 ---
 
-## 1. Accounts, because there are two jobs
+## 1. The runtime account
 
-**Two accounts, because there are two jobs.** Deploying means installing systemd units and reloading
-Caddy — root's work, so it needs sudo. *Running* the service means reading the code, reading one env
-file, opening a port and reaching the database, and nothing else. One account doing both means the
-Node process runs as a member of the sudo group, which lets anyone who compromises it wait for a
-password rather than needing one.
+**Two jobs, but only one account to create.** Deploying means installing systemd units and reloading
+Caddy — root's work, so it needs sudo. *Running* the service means reading the installed release,
+reading one env file, opening a port and reaching the database, and nothing else.
 
-| | deploy account | runtime account |
-|---|---|---|
-| Example name | `zfin-api-admin` | `zfin-api` |
-| Role | deploy and operate | run the services |
-| Shell | yes | none (`nologin`) |
-| Password | yes — sudo authenticates against it | none |
-| sudo | yes | no |
-| Owns | the checkout | nothing |
-| Reads | everything it owns | the checkout, one env file |
+Deploying is done by **a person who administers this host** — not an account created for this
+application. Per-application admin accounts are not a boundary: each would hold full sudo, so each
+could become root and reach every other one's files and credentials. The useful axes are *per
+person* for deployment (so `sudo` logs, file ownership and `last` say who did what) and *per service*
+for the runtime (so a compromise reaches one service's credentials, not all of them).
 
-One runtime account **per service**, not one shared by every service on the machine — the same
-reasoning as the per-database users above. A compromise should reach one service's credentials, not
-all of them.
+So the only account to create here is the one the service runs as:
 
 ```bash
-# Deploy account. A real password: sudo authenticates against the password field, so
-# --disabled-password leaves it in the sudo group and still unable to sudo.
-sudo adduser --gecos "" zfin-api-admin
-sudo usermod -aG sudo zfin-api-admin
-sudo passwd -S zfin-api-admin       # expect P (usable), not L (locked)
-
-# Runtime account. A system account: no password, no shell, no home, never logged into.
+# No password, no shell, no home, never logged into.
 sudo adduser --system --group --no-create-home --shell /usr/sbin/nologin zfin-api
 ```
 
-Give the deploy account its own SSH key, so deploys do not depend on another administrator's
-session.
+| | the deployer | `zfin-api` |
+|---|---|---|
+| Who | an administrator of this host | nothing — a system account |
+| Shell | yes | none (`nologin`) |
+| sudo | yes, and it genuinely needs it | no |
+| Reads | everything | the installed release, one env file |
+
+If a second person ever deploys, they get their own account — not a shared one, and not one named
+after the application.
 
 
 ## 2. Node, and where releases land on the target

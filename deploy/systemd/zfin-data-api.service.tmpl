@@ -10,9 +10,9 @@ Type=simple
 
 # THE RUNTIME IDENTITY, which is NOT the deploy identity.
 #
-# ${SERVICE_USER} owns the checkout and has sudo, because deploying means installing units and
-# reloading Caddy. This process needs none of that: read the code, read one env file, open a port,
-# talk to MySQL. So it runs as ${RUNTIME_USER} — a system account with no password, no shell, no
+# Whoever deploys this needs sudo, because installing units and reloading Caddy is root's work.
+# This process needs none of that: read the installed release, read one env file, open a port, talk
+# to the database. So it runs as ${RUNTIME_USER} — a system account with no password, no shell, no
 # sudo and no home — and a flaw in it yields exactly those four abilities.
 User=${RUNTIME_USER}
 Group=${RUNTIME_USER}

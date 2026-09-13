@@ -8,28 +8,26 @@
 # The values below are illustrative defaults, not a live deployment. Change what you need to.
 
 # ---------------------------------------------------------------------------
-# TWO ACCOUNTS, because there are two jobs
+# THE RUNTIME ACCOUNT
 # ---------------------------------------------------------------------------
 
-# DEPLOY identity. Owns the checkout, runs git pull / npm ci / npm run build, and needs sudo —
-# installing systemd units and reloading Caddy is root's work. This is the account you log into to
-# operate the service, so give it a shell and its own SSH key.
+# What the API and loader processes run as. A system account: no password, no shell, no home, never
+# logged into. It needs exactly four things — read the installed release, read the deployment env
+# file, listen on APP_PORT, reach the database — and a flaw in the Node process yields those and
+# nothing else.
 #
-# It also needs a real password: sudo authenticates against the password field, so an account
-# created with --disabled-password ends up in the sudo group and still unable to sudo.
-SERVICE_USER=zfin-api-admin
-
-# RUNTIME identity. What the API and loader processes actually run as. A system account: no
-# password, no shell, no home, never logged into. It needs exactly four things — read the checkout,
-# read the deployment env file, listen on APP_PORT, reach the database — and a flaw in the Node
-# process yields those and nothing else.
-#
-# Keep this SEPARATE from the deploy account. If one account does both, the service runs as a member
-# of the sudo group, and anyone who compromises the process can wait for a password rather than
-# needing one.
+# Keep it SEPARATE from whoever deploys. A deployer needs sudo (installing units, reloading Caddy is
+# root's work); the service needs none of that. If one account did both, the service would run as a
+# member of the sudo group, and anyone who compromised the process could wait for a password rather
+# than needing one.
 #
 # One runtime account per service, rather than one shared by every service on the machine: a
 # compromise should reach one service's credentials, not all of them.
+#
+# There is deliberately no setting here for the DEPLOY account. Deploying is done by a person with
+# sudo — an administrator of this host, not an account created for this application. Per-application
+# admin accounts are not a boundary: each has full sudo, so each can become root and reach every
+# other one's files. Separate by person, for attribution; separate by service, for the runtime.
 RUNTIME_USER=zfin-api
 
 # ---------------------------------------------------------------------------
