@@ -1,0 +1,31 @@
+# deploy.conf — host-specific deploy values (the ONLY place a host differs).
+#
+# Copy to deploy/deploy.conf (gitignored, like the /etc/zfin-data-api env file) and fill in for
+# THIS host, then run deploy/render-config.sh to generate the systemd units + Caddy site file from
+# the committed *.tmpl files. Nothing host-specific is baked into the tracked files, so porting to
+# another droplet is: edit these values, re-render.
+#
+# The values below are do2's intended values, as a working reference.
+
+# The OS user the API + loader services run as (owns the checkout). Its own user, not shared with
+# another app on the box: a compromise of one service should not hand over the other's config.
+SERVICE_USER=zfin-data-admin
+
+# The code checkout root — also the systemd WorkingDirectory for both units.
+APP_DIR=/home/zfin-data-admin/projects/zfin-data-api
+
+# Absolute path to the Node binary (systemd has no nvm, shell, or PATH niceties). Find it with:
+#   ls ~/.nvm/versions/node        # then append /<version>/bin/node
+# Node 20+ is required by NestJS 11; do2 already has 24 for dg-tour.
+NODE_BIN=/home/zfin-data-admin/.nvm/versions/node/v24.18.0/bin/node
+
+# The public site hostname Caddy serves and auto-provisions a Let's Encrypt cert for. DNS must
+# already resolve this name to the droplet before the Caddy step.
+#
+# FOR A STAGED CUTOVER, point a temporary name here first (e.g. zfin2.zebrafishfacilitymanager.com),
+# verify against the live do1 service, then re-render with the real name once DNS moves.
+SITE_ADDRESS=zfin.zebrafishfacilitymanager.com
+
+# The localhost port the API listens on. Must match PORT in /etc/zfin-data-api/zfin-data-api.env.
+# do2 already runs dg-tour on 3478 (api) and 3479 (ingestor).
+APP_PORT=3480

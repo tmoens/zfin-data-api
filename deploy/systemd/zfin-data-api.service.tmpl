@@ -1,0 +1,25 @@
+[Unit]
+Description=ZFIN Data API (NestJS)
+# The database is DO Managed MySQL (remote), so wait for the network to be fully up — not merely
+# configured — before starting. (No local mysql.service to order on, unlike the old do1 unit.)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=${SERVICE_USER}
+WorkingDirectory=${APP_DIR}
+# The app reads and Joi-validates this directory's zfin-data-api.env itself — it is NOT a systemd
+# EnvironmentFile. That is deliberate: parsing it in the app is what allows the schema to be an
+# exhaustive allowlist, so a typo'd key stops the server and names itself instead of silently
+# taking a default. Config lives outside the checkout, so a git-pull deploy cannot touch it.
+Environment=ZFIN_API_CONFIG_DIR=/etc/zfin-data-api
+# Absolute path to the Node binary — systemd has no nvm, shell, or PATH niceties.
+# Rendered from NODE_BIN in deploy.conf (find it with: ls ~/.nvm/versions/node).
+ExecStart=${NODE_BIN} dist/main.js
+Restart=on-failure
+RestartSec=5
+KillMode=process
+
+[Install]
+WantedBy=multi-user.target

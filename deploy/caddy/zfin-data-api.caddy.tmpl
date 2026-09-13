@@ -1,0 +1,29 @@
+# zfin-data-api Caddy site config — TEMPLATE.
+#
+# Rendered by deploy/render-config.sh to /etc/caddy/conf.d/zfin-data-api.caddy — its OWN file, not
+# a block inside /etc/caddy/Caddyfile.
+#
+# WHY ITS OWN FILE. do2 also hosts dg-tour, whose deploy kit installs Caddy config with
+# `sudo cp .../Caddyfile /etc/caddy/Caddyfile` — it replaces the file wholesale. A site block added
+# to that file by hand survives exactly until the next dg-tour deploy, and the first symptom is
+# this API going dark. One file per app, pulled in by an `import`, means neither deploy can delete
+# the other's config.
+#
+# REQUIRED ONCE, in dg-tour's Caddyfile template (deploy/caddy/Caddyfile.tmpl), at top level:
+#
+#     import /etc/caddy/conf.d/*.caddy
+#
+# render-config.sh checks for that line and refuses to pretend it worked if it is missing.
+#
+# Caddy provisions and renews the Let's Encrypt cert itself, so there is no certbot dance.
+# Prereqs: a DNS A record for ${SITE_ADDRESS} → this droplet, and ports 80 + 443 open in ufw
+# (Caddy uses :80 for the ACME HTTP challenge and the http→https redirect).
+
+${SITE_ADDRESS} {
+    encode gzip
+
+    # The whole site is the API — there is no client to serve, so no file_server and no /var/www.
+    # No path prefix to strip either: this server has no global route prefix, so /mutation/allele/x
+    # is proxied through unchanged.
+    reverse_proxy localhost:${APP_PORT}
+}

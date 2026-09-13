@@ -1,166 +1,132 @@
-## Description
+# zfin-data-api
 
-This is a a single purpose stop-gap API application.
+A single-purpose API that resolves a zebrafish **allele name** to its **ZFIN Id**.
 
-### Problem:
-The wonderful site [ZFIN](https://zfin.org) provides a user interface that 
-allows
-zebrafish researcher to peruse a wealth of zebrafish genetics information.
+## Why it exists
 
-Of the many classes of objects available there, there are two Mutations and 
-Transgenes
-which are known to the research community by an abbreviated name which is loosely
-referred to as an allele. To all intents and purposes, the allele is a human 
-friendly identifier
-for a mutation or a transgene.  The formal ZFIN identifier is not human friendly,
-but it is the key by which other systems know a particular mutation or transgene.
+[ZFIN](https://zfin.org) holds a wealth of zebrafish genetics information. Two of its classes —
+mutations and transgenes — are known to researchers by an abbreviated name loosely called an
+*allele*. The allele is the human-friendly identifier; the ZFIN Id is the key by which other
+systems know the same mutation or transgene.
 
-A particular system exists that frequently needs to resolve from an allele name
-to a ZFIN_Id.
-The only way to do this is to have the user manually go to ZFIN, type in the allele name, copy the
-ZFIN_Id and paste it into the other system. 
+The [Zebrafish Facility Manager](https://zebrafishfacilitymanager.com) needs to resolve one to the
+other constantly, and ZFIN publishes no API that does it. Without this service the only route is
+for a user to visit ZFIN by hand, search the allele name, copy the ZFIN Id, and paste it back.
 
-An API could achieve the same thing much more efficiently, but there is no such API available.
+## How it works
 
-### The Solution
+1. ZFIN publishes a tab-separated list of mutations and another of transgenes, daily.
+2. A systemd timer runs `dist/loader.js` once a night, which reads both files and rebuilds two
+   database tables from them.
+3. This server answers lookups against those tables.
 
-This application simply creates an API that allows it's client to supply and allele name
-and get a ZFIN_Id in return.
+Every row is re-derived from zfin.org nightly, so **the database holds no original data**. That
+single fact shapes a lot of what follows: there is nothing here to back up, and moving the service
+to a new database means creating an empty schema and running the loader.
 
-### The Implementation
+## The API
 
-1. On a daily basis, ZFIN publishes a downloadable tab separated value list of mutations
-   and another of transgenes.
-1. Also on a daily basis, this system reads both those lists and uses that data to 
-   populate a simple database
-1. This system provides some very simple API calls to access the database
+| Route | Answers |
+|---|---|
+| `GET /mutation/allele/:alleleName` | the mutation record, including `zfinId` |
+| `GET /transgene/allele/:alleleName` | the transgene record, including `zfinId` |
+| `GET /health` | `{"status":"ok","production":true}` — liveness, no DB access |
+| `GET /` | a plain-text description of the above |
 
-## Work Flow
+```console
+$ curl https://zfin.zebrafishfacilitymanager.com/mutation/allele/sa12986
+{"zfinId":"ZDB-ALT-130411-2656","alleleName":"sa12986","geneName":"lhfpl4a",
+ "mutationType":"POINT_MUTATION","consequence":"splice site","zfinGeneId":"ZDB-GENE-111017-1"}
+```
 
-### Installation
+> **Known wart: an unknown allele returns `200` with an empty body**, not a `404`. zf-server
+> documents this as issue #202 and absorbs it in `ZfinService.mustFindMutationByName`. Fixing it
+> here is a wire-contract change to the only consumer, so it is deliberately left alone — change
+> both together or neither.
 
-Clone the repo
+`GET /mutation/loadFromZfin` and `GET /transgene/loadFromZfin` trigger a full reload, and exist for
+development. They have **no authentication**, so `ALLOW_LOADING_VIA_API` is false unless a
+deployment says otherwise and production never should: anyone who learned the URL could drop and
+rebuild both tables at will. The nightly loader does not use them — it calls the services directly.
+
+## Configuration
+
+One file holds all deployment configuration, read by both the server and the loader.
+
+- **In production** it lives at **`/etc/zfin-data-api/zfin-data-api.env`** — *outside* the code
+  checkout, owned by the service user, `chmod 600`. A deploy is `git pull` plus a rebuild, and
+  keeping the file elsewhere means a deploy structurally cannot touch the database password.
+- **In development**, copy the sample and point the app at your copy:
+
+  ```bash
+  cp environments/sample.env environments/zfin-data-api.env
+  export ZFIN_API_CONFIG_DIR=environments
+  ```
+
+`environments/sample.env` documents **every key the server accepts** — and that list is exhaustive,
+because the Joi schema in `src/config/config.service.ts` is an **allowlist**. An unrecognised key is
+a startup error that names itself, so a typo stops the server rather than silently taking a default:
+
+```
+Config validation error: "DB_HSOT" is not allowed
+```
+
+This mirrors `zf-server`'s `ConfigService`, with one difference: zf-server is multi-tenant and uses
+`FACILITY` to choose among several env files. This service has one deployment, so it reads one file
+and there is nothing to select.
+
+## Development
 
 ```bash
-$ npm install
+npm install
+docker compose up -d                  # MySQL 8.0.45 on 127.0.0.1:3309
+cp environments/sample.env environments/zfin-data-api.env    # then edit DB_* for the container
+export ZFIN_API_CONFIG_DIR=environments
+
+npm run migration:run                 # create the schema
+npm run start:dev                     # or: npm run build && npm start
+npm run load                          # populate from ZFIN (takes a few seconds)
 ```
 
-### Create a mySQL database - development and production
+The container is MySQL **8.0.45**, pinned to match DO Managed MySQL. That matters: production ran
+MariaDB until the do2 migration, and MariaDB and MySQL 8 differ enough in collations, DDL parsing
+and reserved words that migrations must be authored against the engine that will actually run them.
 
-The code assumes mySQL.
-You need to create a user and a database in mysql.
-The code will create tables automatically.
-
-### Configure the application - development
-
-Edit the .development.env file - the instructions in that file are pretty clear.
-You will need put your database name, user and password there.
-
-### Configure the application - production
-
-Edit a .env file which should be similar to the .development.env file except that
-1. The database should have a good password
-1. It should not be committed to git :)
-
-### Build - production
-
-npm run build
-
-### Run the app - development
-
-This also build the app.
+While iterating on the loader, download the two ZFIN files once and serve them locally rather than
+pulling many megabytes from ZFIN repeatedly — see the commented `ZFIN_*_URL` values in the sample.
 
 ```bash
-# development
-$ npm run start
-
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
+npm run verify      # typecheck + test + lint
 ```
 
-### Run the loaders - development
+## Schema changes
 
-During development you can trigger the loaders manually through the API with:
-```
-http://localhost:your-port/mutation/loadFromZfin
-http://localhost:your-port/transgene/loadFromZfin
-```
+**Migrations only.** `synchronize` is off and must stay off; the runtime database user holds
+`SELECT, INSERT, UPDATE, DELETE` and cannot alter schema even if asked to.
 
-Note: While working on the system, you should probably store abbreviated versions to the
-ZFIN download files on your local server and configure .development.env file to access those files
-to avoid repeatedly downloading the large ZFIN files.
-
-### Run the API - production
-
-### API Server
-Run the API as a service to ensure some resilience over restarts.
-For example, using systemd on Linux. Here is a sample .service file:
-
-```shell
-[Unit]
-Description=ZFIN Data API Service
-After=network.target mysql.service
-[Service]
-ExecStart=/usr/bin/node /var/www/zfin-data-api/live/zfin-data-api/dist/main.js
-Restart=always
-User=the_user_you_want_running_the_service
-Group=that_users_group
-Environment=PATH=/usr/bin:/usr/local/bin
-Environment=NODE_ENV=production
-WorkingDirectory=/var/www/zfin-data-api/live/zfin-data-api
-[Install]
-WantedBy=multi-user.target
+```bash
+npm run migration:generate -- src/migrations/WhatItDoes
+npm run migration:run
+npm run migration:show
+npm run migration:revert
 ```
 
-### Loader
-You can run the loader regularly by making both a service and a timer
-for the loader program under systemd.
+The CLI reads `src/data-source.ts`, which takes plain `DB_*` environment variables and defaults to
+the local container. It deliberately does not go through `ConfigService` — migrations run on the
+**admin plane** with a privileged credential, and have no business requiring a full deployment
+config file. To target a real database:
 
-```shell
-# example service
-[Unit]
-Description=ZFIN Data Loader Service
-Wants=zfin-data-loader.timer
-After=network.target mysql.service
-[Service]
-ExecStart=/usr/bin/node /var/www/zfin-data-api/live/zfin-data-api/dist/loader.js
-User=the_user_you_want_running_the_service
-Group=that_users_group
-Environment=PATH=/usr/bin:/usr/local/bin
-Environment=NODE_ENV=production
-WorkingDirectory=/var/www/zfin-data-api/live/zfin-data-api
-[Install]
-WantedBy=multi-user.target
+```bash
+DB_HOST=<cluster> DB_PORT=25060 DB_NAME=zfin_data DB_USER=doadmin DB_PASSWORD=<pw> \
+  DB_SSL_CA=/etc/zfin-data-api/do-db-service.crt npm run migration:run
 ```
 
-```shell
-# example timer
-# /etc/systemd/system/zfin-data-loader.timer
-[Unit]
-Description=Run zfin-data-loader every day
-Requires=zfin-data-loader.service
-[Timer]
-Unit=zfin-data-loader.service
-OnCalendar=*-*-* 11:00:00
-Persistent=true
-[Install]
-WantedBy=timers.target
-```
+## Deployment
 
-### Web Access to API
+See **[deploy/README.md](deploy/README.md)** for the full runbook: provisioning the database on DO
+Managed MySQL, the Caddy + systemd arrangement, and the do1 → do2 cutover.
 
-Also, you will need a domain name for the site and map that domain to your host system.
-
-Your system probably alread has a web server like Apache2.  If not you have to install one.
-Configure it with a virtual site which will pass
-requests through to your node server.  
-
-### Call the API
-
-```
-https://the_domain_you_are_using/mutation/allele/the_allele_you_are_interensted_in
-```
-If the allele is known, you get back a small record which includes the ZFIN_Id.
+In short: Caddy terminates TLS and proxies to a loopback-bound Node process under systemd, with a
+second unit and a timer for the nightly load, and all configuration in `/etc/zfin-data-api/`. It
+follows the same model as `zf-server` and `dg-tour`; `deploy/render-config.sh` generates this
+host's unit files and Caddy site from `deploy/deploy.conf`.

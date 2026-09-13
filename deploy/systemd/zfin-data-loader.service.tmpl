@@ -1,0 +1,20 @@
+[Unit]
+Description=ZFIN Data loader (nightly reload from zfin.org)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+# Oneshot, NOT simple: this process loads both datasets and exits. Type=simple would have systemd
+# treat the exit as the service stopping and — with any Restart= setting — start it again.
+Type=oneshot
+User=${SERVICE_USER}
+WorkingDirectory=${APP_DIR}
+Environment=ZFIN_API_CONFIG_DIR=/etc/zfin-data-api
+ExecStart=${NODE_BIN} dist/loader.js
+# The loader now exits non-zero when a load fails, so a failure shows up as a failed unit:
+#   systemctl status zfin-data-loader      # and `systemctl list-timers` for when it last ran
+# Previously it swallowed errors and always exited 0, so a broken load looked identical to a
+# successful one.
+
+[Install]
+WantedBy=multi-user.target
