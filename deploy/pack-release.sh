@@ -97,4 +97,4 @@ sed 's/^/    /' "$staging/$name/RELEASE"
 echo
 echo "    Ship it:"
 echo "      scp $out/$name.tgz <target>:/tmp/"
-echo "      ssh <target> 'sudo /srv/zfin-data-api/install-release.sh /tmp/$name.tgz'"
+echo "      ssh <target> 'sudo zfin-data-api-deploy /tmp/$name.tgz'"

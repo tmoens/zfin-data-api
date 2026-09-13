@@ -138,7 +138,11 @@ scp deploy/install-release.sh <target>:/tmp/
 
 # `install src dst` copies a file. This lands in /usr/local/sbin, where admin tools live —
 # not under the release directory. It is the tool, not a release.
-ssh <target> 'sudo install -o root -g root -m 755 /tmp/install-release.sh /usr/local/sbin/install-release.sh'
+#
+# Install it under a name carrying the application. There will be one of these per service, and
+# a generic `install-release` in a shared directory says nothing about which; extensionless,
+# as tools there conventionally are.
+ssh <target> 'sudo install -o root -g root -m 755 /tmp/install-release.sh /usr/local/sbin/zfin-data-api-deploy'
 ```
 
 Copy it again whenever it changes; it is versioned in this repository alongside the units.
@@ -290,7 +294,7 @@ scp dist-releases/<name>.tgz <target>:/tmp/
 **On the target:**
 
 ```bash
-sudo install-release.sh /tmp/<name>.tgz
+sudo zfin-data-api-deploy /tmp/<name>.tgz
 sudo systemctl enable --now zfin-data-api
 sudo systemctl enable --now zfin-data-loader.timer    # the TIMER, not the service
 ```
@@ -406,7 +410,7 @@ on a production host.
 **On the target:**
 
 ```bash
-sudo install-release.sh /tmp/<name>.tgz
+sudo zfin-data-api-deploy /tmp/<name>.tgz
 ```
 
 It unpacks beside the current version, repoints `current`, restarts the service, and then checks
@@ -415,8 +419,8 @@ that the service is actually answering — `systemctl restart` returns success a
 restarts, and exits non-zero.
 
 ```bash
-sudo install-release.sh --list        # what is installed, and what is live
-sudo install-release.sh --rollback    # back to the previous version
+sudo zfin-data-api-deploy --list        # what is installed, and what is live
+sudo zfin-data-api-deploy --rollback    # back to the previous version
 ```
 
 **Schema changes** are separate and deliberate — see step 9. If a release needs one, apply it before

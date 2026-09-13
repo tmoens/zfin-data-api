@@ -21,10 +21,16 @@
 # run deliberately — see the deployment guide. If a release needs a schema change, apply it before
 # installing the release that depends on it.
 #
-# Usage:
-#   sudo install-release.sh <artifact.tgz>        # install and make current
-#   sudo install-release.sh --rollback            # return to the previous release
-#   sudo install-release.sh --list                # what is on disk, and what is live
+# INSTALLED NAME. On the target this belongs in /usr/local/sbin under a name carrying the
+# application, not the generic one it has here — there will be a tool like this per service, and
+# `install-release` in a shared directory says nothing about which. Extensionless, as tools there
+# conventionally are:
+#     sudo install -o root -g root -m 755 install-release.sh /usr/local/sbin/zfin-data-api-deploy
+#
+# Usage (as installed):
+#   sudo zfin-data-api-deploy <artifact.tgz>      # install and make current
+#   sudo zfin-data-api-deploy --rollback          # return to the previous release
+#   sudo zfin-data-api-deploy --list              # what is on disk, and what is live
 #
 set -euo pipefail
 
