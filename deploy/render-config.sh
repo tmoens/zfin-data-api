@@ -25,11 +25,15 @@ out="$here/.rendered"
 # shellcheck disable=SC1090
 set -a; source "$conf"; set +a
 
-: "${SERVICE_USER:?set in deploy.conf}" "${APP_DIR:?set in deploy.conf}" \
-  "${NODE_BIN:?set in deploy.conf}" "${SITE_ADDRESS:?set in deploy.conf}" \
-  "${APP_PORT:?set in deploy.conf}"
+: "${SERVICE_USER:?set in deploy.conf}" "${RUNTIME_USER:?set in deploy.conf}" \
+  "${APP_DIR:?set in deploy.conf}" "${NODE_BIN:?set in deploy.conf}" \
+  "${SITE_ADDRESS:?set in deploy.conf}" "${APP_PORT:?set in deploy.conf}"
 
-[ -x "$NODE_BIN" ] || echo "warning: NODE_BIN ($NODE_BIN) is not executable on this host — check 'ls ~/.nvm/versions/node'." >&2
+[ -x "$NODE_BIN" ] || echo "warning: NODE_BIN ($NODE_BIN) is not executable on this host." >&2
+id "$RUNTIME_USER" >/dev/null 2>&1 || echo "warning: RUNTIME_USER ($RUNTIME_USER) does not exist yet — the units will fail to start until it does." >&2
+if [ -d "$APP_DIR" ] && ! sudo -u "$RUNTIME_USER" test -r "$APP_DIR/dist/main.js" 2>/dev/null; then
+  echo "warning: $RUNTIME_USER cannot read $APP_DIR/dist/main.js — check the group and mode on $APP_DIR (expected -o $SERVICE_USER -g $RUNTIME_USER -m 2750)." >&2
+fi
 
 # The port the unit serves and the port the app binds are set in two different files; a mismatch
 # gives a site that 502s with both halves looking correct in isolation.
@@ -47,6 +51,7 @@ mkdir -p "$out"
 render() {
   # sed, not envsubst, to stay dependency-free. '|' delimiter since values contain '/'.
   sed -e "s|\${SERVICE_USER}|${SERVICE_USER}|g" \
+      -e "s|\${RUNTIME_USER}|${RUNTIME_USER}|g" \
       -e "s|\${APP_DIR}|${APP_DIR}|g" \
       -e "s|\${NODE_BIN}|${NODE_BIN}|g" \
       -e "s|\${SITE_ADDRESS}|${SITE_ADDRESS}|g" \

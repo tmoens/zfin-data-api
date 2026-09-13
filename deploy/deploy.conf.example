@@ -7,22 +7,51 @@
 #
 # The values below are do2's intended values, as a working reference.
 
-# The OS user the API + loader services run as (owns the checkout). `zsm` carries over from do1,
-# where it is the general-purpose application account for every service on the box.
+# ---------------------------------------------------------------------------
+# TWO ACCOUNTS, because there are two jobs
+# ---------------------------------------------------------------------------
+
+# DEPLOY identity. Owns the checkout, runs git pull / npm ci / npm run build, and needs sudo —
+# installing systemd units and reloading Caddy is root's work. The `-admin` suffix follows the
+# convention already on this droplet (dg-tour-admin). This is the account you log into to operate
+# the box, and the facility servers will share it when they follow.
 #
-# One do1 detail that does NOT need to carry over is membership of www-data. That was for Apache,
-# which served client builds out of zsm's directories; Caddy reaches THIS service over a TCP port
-# on localhost and never reads its files. Harmless either way — it matters when the facility
-# servers follow, since those do have static client builds to serve.
-SERVICE_USER=zsm
+# It needs a real password: sudo authenticates against the password field, so an account created
+# with --disabled-password is in the sudo group and still cannot sudo.
+SERVICE_USER=tsw-admin
+
+# RUNTIME identity. What the API and loader processes actually run as. A system account: no
+# password, no shell, no sudo, no home. It needs exactly four things — read the checkout, read
+# /etc/zfin-data-api/zfin-data-api.env, listen on APP_PORT, reach MySQL — and a flaw in the Node
+# process yields exactly those and nothing else.
+#
+# One runtime account PER SERVICE, not one shared across everything on the box. That is the same
+# reasoning as the per-facility database users: a compromise should reach one service's credentials,
+# not every service's. When the facility servers land here they each get their own, all sharing a
+# group that can read the one shared checkout.
+RUNTIME_USER=tsw
+
+# ---------------------------------------------------------------------------
 
 # The code checkout root — also the systemd WorkingDirectory for both units.
-APP_DIR=/home/zsm/projects/zfin-data-api
+#
+# /srv, NOT a home directory. The runtime account has to read this tree, and a home directory is
+# 0750 to its owner — `tsw` simply cannot traverse into /home/tsw-admin. That alone settles it; the
+# units additionally set ProtectHome=yes, which hides /home from them altogether.
+#
+# Owned by the deploy user, group-readable by the runtime user, setgid so that a fresh `npm ci`
+# keeps the group on everything it writes:
+#     sudo install -d -o tsw-admin -g tsw -m 2750 /srv/zfin-data-api
+APP_DIR=/srv/zfin-data-api
 
-# Absolute path to the Node binary (systemd has no nvm, shell, or PATH niceties). Find it with:
-#   ls ~/.nvm/versions/node        # then append /<version>/bin/node
-# Node 20+ is required by NestJS 11; do2 already has 24 for dg-tour.
-NODE_BIN=/home/zsm/.nvm/versions/node/v24.18.0/bin/node
+# Absolute path to the Node binary (systemd has no nvm or PATH). Node 20+ is required by NestJS 11.
+#
+# A SYSTEM Node, not one under ~/.nvm. Same reason as APP_DIR: the runtime account cannot read
+# another user's home, and ProtectHome=yes hides /home from the unit besides. Installing it
+# system-wide also means the version that builds the code is the version that runs it. do1 and
+# dg-tour both carry an absolute nvm path in ExecStart; this drops that wart rather than
+# reproducing it.
+NODE_BIN=/usr/bin/node
 
 # The public site hostname Caddy serves and auto-provisions a Let's Encrypt cert for. DNS must
 # already resolve this name to the droplet before the Caddy step.

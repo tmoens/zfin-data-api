@@ -7,19 +7,65 @@ After=network-online.target
 
 [Service]
 Type=simple
-User=${SERVICE_USER}
+
+# THE RUNTIME IDENTITY, which is NOT the deploy identity.
+#
+# ${SERVICE_USER} owns the checkout and has sudo, because deploying means installing units and
+# reloading Caddy. This process needs none of that: read the code, read one env file, open a port,
+# talk to MySQL. So it runs as ${RUNTIME_USER} — a system account with no password, no shell, no
+# sudo and no home — and a flaw in it yields exactly those four abilities.
+User=${RUNTIME_USER}
+Group=${RUNTIME_USER}
+
 WorkingDirectory=${APP_DIR}
+
 # The app reads and Joi-validates this directory's zfin-data-api.env itself — it is NOT a systemd
 # EnvironmentFile. That is deliberate: parsing it in the app is what allows the schema to be an
 # exhaustive allowlist, so a typo'd key stops the server and names itself instead of silently
 # taking a default. Config lives outside the checkout, so a git-pull deploy cannot touch it.
 Environment=ZFIN_API_CONFIG_DIR=/etc/zfin-data-api
-# Absolute path to the Node binary — systemd has no nvm, shell, or PATH niceties.
-# Rendered from NODE_BIN in deploy.conf (find it with: ls ~/.nvm/versions/node).
+
+# Node lives in /usr, not a user's nvm directory — the runtime account cannot read another user's
+# home (0750), and ProtectHome=yes below hides /home from this unit in any case.
 ExecStart=${NODE_BIN} dist/main.js
+
 Restart=on-failure
 RestartSec=5
 KillMode=process
+
+# ---- Sandbox ----------------------------------------------------------------
+# A dedicated runtime account is only half the point; these are the other half. Each line removes
+# something this service demonstrably does not use.
+NoNewPrivileges=true
+UMask=0077
+# Whole filesystem read-only, /home hidden, private /tmp. The service writes nothing to disk: logs
+# go to journald via stdout, and all state is in MySQL. So it needs no ReadWritePaths at all.
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+ProtectProc=invisible
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+# Listens on a high port and dials MySQL, so it needs no capabilities whatsoever.
+CapabilityBoundingSet=
+AmbientCapabilities=
+# AF_UNIX is required: glibc's resolver talks to systemd-resolved over a unix socket.
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+SystemCallArchitectures=native
+# NOTE: deliberately NOT MemoryDenyWriteExecute=true. V8 allocates write-then-execute pages for the
+# JIT, so that directive makes Node fail to start. It is the one hardening line that looks obviously
+# correct and breaks this service.
 
 [Install]
 WantedBy=multi-user.target
