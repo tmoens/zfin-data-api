@@ -135,7 +135,10 @@ tmp="$(mktemp -d "$releases/.incoming.XXXXXX")"
 cleanup_tmp() { [ -n "${tmp:-}" ] && rm -rf "$tmp"; }
 trap cleanup_tmp EXIT
 
-tar -xzf "$artifact" -C "$tmp"
+# --no-same-owner because this runs as root, and root-extraction otherwise RESTORES the uid/gid
+# recorded in the archive — the build machine's user, which is a different person's account here or
+# a stranger's uid entirely. The release must belong to root; the runtime account reads it as other.
+tar -xzf "$artifact" -C "$tmp" --no-same-owner --no-same-permissions
 
 shopt -s nullglob
 entries=("$tmp"/*)
@@ -156,8 +159,9 @@ else
   echo "==> unpacked $name"
 fi
 
-# The runtime account only reads this tree; it never writes to it.
-chmod -R go-w "$dest"
+# The runtime account only reads this tree; it never writes to it, and nobody but root changes it.
+chown -R root:root "$dest"
+chmod -R u=rwX,go=rX "$dest"
 
 # --- flip and restart --------------------------------------------------------
 previous="$(readlink -f "$current" 2>/dev/null || true)"
