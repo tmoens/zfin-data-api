@@ -3,12 +3,9 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
 /**
  * The starting schema: the two tables this API serves.
  *
- * THIS IS A GREENFIELD MIGRATION, not a transcription of the old database. The previous deployment
- * built its tables with TypeORM `synchronize: true` against MariaDB 10.5, so there was never a
- * migration chain and no record of how that schema came to be. Rather than reverse-engineer and
- * baseline it, the cutover creates this schema on MySQL 8 and reloads from ZFIN — every row here is
- * re-derived from zfin.org nightly, so there is no data to preserve and nothing to lose by starting
- * clean. `synchronize` is off from here on; schema changes are versioned migrations only.
+ * A deployment starts from an empty database and runs this, then the loader. Every row in these
+ * tables is re-derived from zfin.org nightly, so there is no data that has to survive a move.
+ * `synchronize` is off; schema changes are versioned migrations only.
  *
  * Both tables are keyed by the ZFIN Id and indexed on the allele name, which is the only column
  * anything ever searches. utf8mb4 is stated explicitly rather than inherited from the server

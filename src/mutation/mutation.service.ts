@@ -26,11 +26,8 @@ export class MutationService {
   /**
    * Replace the mutation table with the current contents of the ZFIN download.
    *
-   * AWAITED END TO END. This used to return the moment the HTTP request was issued, doing the real
-   * work inside a .subscribe() callback that nothing waited on and whose errors went nowhere. The
-   * caller — the nightly loader — compensated by sleeping 60 seconds and hoping. Now the promise
-   * resolves when the data is actually in the table, and a failure propagates to a caller that can
-   * report it.
+   * Awaited end to end: the promise resolves when the data is in the table, and any failure
+   * propagates to the caller rather than being swallowed.
    */
   async loadFromZfin(): Promise<string> {
     const url = this.configService.zfinMutationUrl;

@@ -86,16 +86,14 @@ export class ZfinMutationRecord {
    * Two things are being rejected here. The obvious one is deficiencies and translocations, which
    * are in the file but are not the kind of mutation this API answers for.
    *
-   * The other is any line whose first field is not a ZFIN identifier. On today's file that rejects
-   * exactly one thing: the empty string left by the trailing newline, which the old code turned
-   * into a Mutation with no id and no allele name and handed to an INSERT IGNORE.
+   * The other is any line whose first field is not a ZFIN identifier. On the current file that
+   * rejects exactly one thing — the empty string left by the trailing newline — so it is mostly
+   * DEFENSIVE, and deliberately so.
    *
-   * Otherwise it is DEFENSIVE, and deliberately so — checked against the live download, it keeps
-   * precisely the same rows the old `!isDeficiencyOrTranslocation()` filter kept. Its real job is
-   * to let the services tell "nothing parsed" apart from "the dataset is empty": an HTML error page
-   * served with a 200 produces no ZDB- lines at all, so it is recognisable instead of being written
-   * over real data. The file carries no header row today; if ZFIN ever adds one, this rejects that
-   * too.
+   * Its real job is to let the services tell "nothing parsed" apart from "the dataset is empty": an
+   * HTML error page served with a 200 produces no ZDB- lines at all, so it is recognisable instead
+   * of being written over real data. The file carries no header row; if ZFIN ever adds one, this
+   * rejects that too.
    */
   isLoadable(): boolean {
     return (

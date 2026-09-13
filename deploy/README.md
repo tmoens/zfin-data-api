@@ -63,13 +63,11 @@ split appears again in the operating-system accounts at step 2.
 Caddy — root's work, so it needs sudo. *Running* the service means reading the installed release,
 reading one env file, opening a port and reaching the database, and nothing else.
 
-Deploying is done by **a person who administers this host** — not an account created for this
-application. Per-application admin accounts are not a boundary: each would hold full sudo, so each
-could become root and reach every other one's files and credentials. The useful axes are *per
-person* for deployment (so `sudo` logs, file ownership and `last` say who did what) and *per service*
-for the runtime (so a compromise reaches one service's credentials, not all of them).
+Deploying is done by **a person who administers this host**. Accounts are separated *per person*
+for that, so `sudo` logs, file ownership and `last` record who did what, and *per service* for the
+runtime, so a compromise reaches one service's credentials rather than all of them.
 
-So the only account to create here is the one the service runs as:
+The only account to create here is the one the service runs as:
 
 ```bash
 # No password, no shell, no home, never logged into.
@@ -83,8 +81,7 @@ sudo adduser --system --group --no-create-home --shell /usr/sbin/nologin zfin-ap
 | sudo | yes, and it genuinely needs it | no |
 | Reads | everything | the installed release, one env file |
 
-If a second person ever deploys, they get their own account — not a shared one, and not one named
-after the application.
+A second person who deploys gets their own account, named after them.
 
 
 ## 2. Node, and where releases land on the target

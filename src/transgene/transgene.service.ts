@@ -26,8 +26,7 @@ export class TransgeneService {
   /**
    * Replace the transgene table with the current contents of the ZFIN download.
    *
-   * See MutationService.loadFromZfin — same shape, same reasons, including why this is awaited to
-   * completion rather than fired into a .subscribe().
+   * See MutationService.loadFromZfin — same shape, same reasons.
    */
   async loadFromZfin(): Promise<string> {
     const url = this.configService.zfinTransgeneUrl;

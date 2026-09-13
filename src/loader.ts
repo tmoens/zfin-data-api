@@ -16,13 +16,8 @@ import { TransgeneService } from './transgene/transgene.service';
  * createApplicationContext, not create(): this needs the DI container and the database, not an
  * HTTP listener.
  *
- * IT NOW WAITS FOR THE LOAD, AND FAILS LOUDLY. The previous version fired the loads off and slept
- * for 60 seconds before calling process.exit() — a guess that the work would be done by then, with
- * nothing checking. The two services returned as soon as the HTTP request was *issued*, so a slow
- * ZFIN response truncated the load silently, and an error inside the subscribe callback went
- * nowhere at all: no log line, exit code 0, and a green systemd timer over a table that never
- * got written. Awaiting real promises and exiting non-zero on failure is what makes
- * `systemctl status zfin-data-loader` mean something.
+ * It waits for both loads to finish and exits non-zero if either fails, which is what makes
+ * `systemctl status zfin-data-loader` and a failed timer mean something.
  */
 async function bootstrap() {
   const logger = new Logger('Loader');

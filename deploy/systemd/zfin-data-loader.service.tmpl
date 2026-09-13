@@ -22,8 +22,6 @@ ExecStart=${NODE_BIN} dist/loader.js
 
 # The loader exits non-zero when a load fails, so a failure shows up as a failed unit:
 #   systemctl status zfin-data-loader      # and `systemctl list-timers` for when it last ran
-# Previously it swallowed errors and always exited 0, so a broken load looked identical to a
-# successful one.
 
 # ---- Sandbox ----------------------------------------------------------------
 # Identical to the API's, minus nothing: this process reaches further out (it fetches from zfin.org)

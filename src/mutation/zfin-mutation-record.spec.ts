@@ -36,8 +36,7 @@ describe('ZfinMutationRecord.isLoadable', () => {
     );
   });
 
-  // The current file has NO header row — this is a guard against ZFIN adding one, not a fix for
-  // something that was happening.
+  // The current file has no header row; this guards against ZFIN adding one.
   it('rejects a header row, should ZFIN ever add one', () => {
     expect(
       fromLine(
@@ -46,8 +45,7 @@ describe('ZfinMutationRecord.isLoadable', () => {
     ).toBe(false);
   });
 
-  // This one is real: the file ends with a newline, so split('\n') yields a trailing empty
-  // element, which the old code turned into a row with no id.
+  // The file ends with a newline, so split('\n') yields a trailing empty element.
   it('rejects the trailing blank line', () => {
     expect(fromLine('').isLoadable()).toBe(false);
   });

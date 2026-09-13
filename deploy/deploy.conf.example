@@ -24,10 +24,8 @@
 # One runtime account per service, rather than one shared by every service on the machine: a
 # compromise should reach one service's credentials, not all of them.
 #
-# There is deliberately no setting here for the DEPLOY account. Deploying is done by a person with
-# sudo — an administrator of this host, not an account created for this application. Per-application
-# admin accounts are not a boundary: each has full sudo, so each can become root and reach every
-# other one's files. Separate by person, for attribution; separate by service, for the runtime.
+# Deploying is a separate matter and needs no setting here: it is done by a person with sudo who
+# administers this host.
 RUNTIME_USER=zfin-api
 
 # ---------------------------------------------------------------------------
