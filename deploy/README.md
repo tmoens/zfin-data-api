@@ -106,9 +106,21 @@ fourteen facility servers plus dgf, sundayknighters and this API, sits in `sudo`
 is the account you log into to operate the box. Reproducing it on do2 keeps one operator identity
 across both hosts and is what the facilities will want when they follow.
 
+Note that `--disabled-password` and sudo are mutually exclusive: sudo authenticates against the
+password field, so an account created with a locked password is in the sudo group and still cannot
+sudo. Give it a real one.
+
+This account does two jobs — deploying (which needs sudo) and running the service (which needs
+almost nothing). Because they are one account, the Node process runs as a member of the sudo group.
+Not instant root, since sudo wants a password that code execution does not supply, but it lets an
+attacker wait for one. Accept that here: the data is public and rebuilds nightly. Revisit it before
+the facility servers move to this box, where the data is researcher PII and a fresh host is the
+cheap moment to split the deploy identity from the runtime one.
+
 ```bash
-sudo adduser --disabled-password --gecos "" zsm
+sudo adduser --gecos "" zsm         # prompts for a password: sudo authenticates against it
 sudo usermod -aG sudo zsm           # as on do1: this is the account you deploy from
+sudo passwd -S zsm                  # expect P (usable password), not L (locked)
 sudo -u zsm -i                      # then, as that user:
   curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
   nvm install 24                    # NestJS 11 requires Node >= 20
