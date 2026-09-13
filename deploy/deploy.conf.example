@@ -7,17 +7,22 @@
 #
 # The values below are do2's intended values, as a working reference.
 
-# The OS user the API + loader services run as (owns the checkout). Its own user, not shared with
-# another app on the box: a compromise of one service should not hand over the other's config.
-SERVICE_USER=zfin-data-admin
+# The OS user the API + loader services run as (owns the checkout). `zsm` carries over from do1,
+# where it is the general-purpose application account for every service on the box.
+#
+# One do1 detail that does NOT need to carry over is membership of www-data. That was for Apache,
+# which served client builds out of zsm's directories; Caddy reaches THIS service over a TCP port
+# on localhost and never reads its files. Harmless either way — it matters when the facility
+# servers follow, since those do have static client builds to serve.
+SERVICE_USER=zsm
 
 # The code checkout root — also the systemd WorkingDirectory for both units.
-APP_DIR=/home/zfin-data-admin/projects/zfin-data-api
+APP_DIR=/home/zsm/projects/zfin-data-api
 
 # Absolute path to the Node binary (systemd has no nvm, shell, or PATH niceties). Find it with:
 #   ls ~/.nvm/versions/node        # then append /<version>/bin/node
 # Node 20+ is required by NestJS 11; do2 already has 24 for dg-tour.
-NODE_BIN=/home/zfin-data-admin/.nvm/versions/node/v24.18.0/bin/node
+NODE_BIN=/home/zsm/.nvm/versions/node/v24.18.0/bin/node
 
 # The public site hostname Caddy serves and auto-provisions a Let's Encrypt cert for. DNS must
 # already resolve this name to the droplet before the Caddy step.

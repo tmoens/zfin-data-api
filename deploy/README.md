@@ -52,18 +52,38 @@ is public ZFIN reference data with no facility PII, so it co-tenants harmlessly.
    FLUSH PRIVILEGES;
    ```
 
+### If you are copying from `/etc/dg-tour/db.env`
+
+dg-tour is the working example on this droplet, but **the key names differ** — it predates the
+zf-server conventions this service follows. The values are the same; the names are not:
+
+| `/etc/dg-tour/db.env` | `/etc/zfin-data-api/zfin-data-api.env` |
+|---|---|
+| `DB_HOST` | `DB_HOST` (same) |
+| `DB_PORT` | `DB_PORT` (same) |
+| `DB_DATABASE` | **`DB_NAME`** |
+| `DB_USERNAME` | **`DB_USER`** |
+| `DB_PASSWORD` | `DB_PASSWORD` (same) |
+| `DB_CERTIFICATE_FILE` | **`DB_SSL_CA`** |
+
+A dg-tour name pasted in here is not ignored — the allowlist rejects it and the server refuses to
+start, naming the key. That is the intended behaviour, but it is worth knowing why it happened.
+
 > **No data is migrated from do1.** Every row is re-derived from zfin.org nightly, so the cutover
 > creates an empty schema and runs the loader. There is no dump, no import, and no MariaDB → MySQL
 > collation drift to reconcile. See the `InitialSchema` migration for the reasoning.
 
 ## 2. Service user and checkout
 
-A user of its own, not shared with dg-tour: a compromise of one service should not hand over the
-other's configuration.
+`zsm` carries over from do1, where it is the general-purpose application account — it runs all
+fourteen facility servers plus dgf, sundayknighters and this API, sits in `sudo` and `www-data`, and
+is the account you log into to operate the box. Reproducing it on do2 keeps one operator identity
+across both hosts and is what the facilities will want when they follow.
 
 ```bash
-sudo adduser --disabled-password --gecos "" zfin-data-admin
-sudo -u zfin-data-admin -i          # then, as that user:
+sudo adduser --disabled-password --gecos "" zsm
+sudo usermod -aG sudo zsm           # as on do1: this is the account you deploy from
+sudo -u zsm -i                      # then, as that user:
   curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
   nvm install 24                    # NestJS 11 requires Node >= 20
   mkdir -p ~/projects && cd ~/projects
@@ -77,7 +97,7 @@ sudo -u zfin-data-admin -i          # then, as that user:
 ```bash
 sudo cp environments/sample.env /etc/zfin-data-api/zfin-data-api.env
 sudo vi /etc/zfin-data-api/zfin-data-api.env     # DB_*, PORT, PUBLIC_URL, ZFIN_*_URL
-sudo chown zfin-data-admin:zfin-data-admin /etc/zfin-data-api/zfin-data-api.env
+sudo chown zsm:zsm /etc/zfin-data-api/zfin-data-api.env
 sudo chmod 600 /etc/zfin-data-api/zfin-data-api.env
 ```
 
@@ -108,7 +128,7 @@ DB_HOST=<cluster-host> DB_PORT=25060 DB_NAME=zfin_data \
 cp deploy/deploy.conf.example deploy/deploy.conf
 vi deploy/deploy.conf          # SERVICE_USER, APP_DIR, NODE_BIN, SITE_ADDRESS, APP_PORT
 deploy/render-config.sh        # inspect deploy/.rendered/ first
-deploy/render-config.sh --install
+deploy/render-config.sh --install    # needs sudo; run it as an account that has it
 sudo systemctl enable --now zfin-data-api
 sudo systemctl enable --now zfin-data-loader.timer    # the TIMER, not the service
 ```
@@ -140,10 +160,9 @@ Point a temporary name (e.g. `zfin2.zebrafishfacilitymanager.com`) at do2 first 
 the live do1 service before moving DNS:
 
 ```bash
-# on do2
+# on do2 — the oneshot unit runs as zsm with the right config already
 curl -s localhost:3480/health
-sudo -u zfin-data-admin ~zfin-data-admin/.nvm/versions/node/v24.*/bin/node \
-  ~zfin-data-admin/projects/zfin-data-api/dist/loader.js     # first population
+sudo systemctl start zfin-data-loader && journalctl -u zfin-data-loader -n 20 --no-pager
 
 # from anywhere — the two should agree
 for a in sa12986 y1Tg; do
@@ -181,7 +200,7 @@ processes run normally and report nothing.
 ## Deploying a new version
 
 ```bash
-sudo -u zfin-data-admin -i
+sudo -u zsm -i
 cd ~/projects/zfin-data-api && git pull && npm ci && npm run build
 exit
 # apply any new migrations on the admin plane (see step 4), then:

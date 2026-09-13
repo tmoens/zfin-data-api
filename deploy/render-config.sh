@@ -103,7 +103,18 @@ if [ "${1:-}" = "--install" ]; then
   echo "  sudo systemctl restart zfin-data-api                 # to pick up unit changes"
 else
   check_caddy_import || true
-  echo
-  echo "rendered into $out/ — NOT installed. To install:"
-  echo "  deploy/render-config.sh --install"
+  cat <<MSG
+
+rendered into $out/ — NOT installed.
+
+The service user owns the checkout but has no sudo, so rendering and installing are usually done by
+different people. Either re-run this as a sudoer with --install, or run these by hand:
+
+  sudo install -d -m 755 /etc/caddy/conf.d
+  sudo cp $out/*.service $out/*.timer /etc/systemd/system/
+  sudo systemctl daemon-reload
+  sudo cp $out/zfin-data-api.caddy /etc/caddy/conf.d/zfin-data-api.caddy
+  sudo caddy validate --config /etc/caddy/Caddyfile
+  sudo systemctl reload caddy
+MSG
 fi
