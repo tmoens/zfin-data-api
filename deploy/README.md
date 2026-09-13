@@ -11,6 +11,32 @@ particular droplet.
 
 ---
 
+## 0. DNS — do this first, it is the one step that waits
+
+Deploy under a **staging name** so the new host can be compared against the live one before any
+traffic moves. Nothing below touches `zfin.zebrafishfacilitymanager.com` until step 6.
+
+DNS for `zebrafishfacilitymanager.com` is **not** at DigitalOcean — the nameservers are
+`ns1/2/3.dnsowl.com`, so records are managed at the registrar.
+
+| Type | Host | Value | TTL |
+|---|---|---|---|
+| `A` | `zfin2` | `64.23.233.105` (do2) | `300` |
+
+```bash
+dig +short A zfin2.zebrafishfacilitymanager.com     # expect 64.23.233.105
+dig +short A zfin.zebrafishfacilitymanager.com      # 137.184.239.25 — do1, unchanged
+```
+
+Caddy cannot obtain a certificate before the name resolves, so start this before the rest and let
+it propagate while you work.
+
+**Set a low TTL on anything you intend to move.** The existing records carry 7200 — two hours — so
+with them untouched a cutover takes two hours to reach everyone, *and so does undoing it*. Drop
+`zfin` to 300 the day before you plan to flip it, and raise it again afterwards.
+
+---
+
 ## Credential model — read this first
 
 Two planes, separated by privilege on purpose. Same model as the zebrafish-facility-manager
