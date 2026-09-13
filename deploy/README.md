@@ -119,6 +119,7 @@ This folder holds no secrets (those are in `/etc/zfin-data-api`), so it does not
 permissions:
 
 ```bash
+# `install -d` makes a directory. It stays empty until step 8 puts a release in it.
 sudo install -d -o root -g root -m 755 /srv/zfin-data-api
 ```
 
@@ -134,6 +135,9 @@ tool, so it goes where those live:
 
 ```bash
 scp deploy/install-release.sh <target>:/tmp/
+
+# `install src dst` copies a file. This lands in /usr/local/sbin, where admin tools live —
+# not under the release directory. It is the tool, not a release.
 ssh <target> 'sudo install -o root -g root -m 755 /tmp/install-release.sh /usr/local/sbin/install-release.sh'
 ```
 
