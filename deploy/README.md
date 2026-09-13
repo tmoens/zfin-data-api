@@ -183,6 +183,26 @@ Managed services also restrict which hosts may connect — add this host to that
 varies by provider: 3306 self-hosted, 25060 on DigitalOcean Managed MySQL, 3306 on RDS. Don't
 hard-code it.
 
+**Check the path before you need it.** All three of these can be confirmed from the target with no
+credentials at all, and a wrong certificate otherwise surfaces much later looking like an
+authentication problem:
+
+```bash
+HOST=your-cluster.example.com ; PORT=25060
+
+getent hosts "$HOST" >/dev/null && echo "DNS ok" || echo "DNS does NOT resolve"
+
+timeout 5 bash -c "</dev/tcp/$HOST/$PORT" 2>/dev/null \
+  && echo "TCP open — this host is allowed to connect" \
+  || echo "TCP refused — add this host to the allow list"
+
+openssl s_client -connect "$HOST:$PORT" -starttls mysql -CAfile /etc/zfin-data-api/db-ca.crt \
+  </dev/null 2>/dev/null | grep "Verify return code"
+```
+
+The last should print `Verify return code: 0 (ok)`. Anything else means the CA file does not match
+this server.
+
 > **Migrating from an existing deployment? Do not copy the data.** Every row in this database is
 > re-derived from zfin.org nightly, so a migration is an empty schema plus one loader run. There is
 > no dump, no import, and no cross-engine collation drift to reconcile.
