@@ -1,15 +1,15 @@
 # Local MySQL 8 for migration development and manual testing.
 #
-# WHY a container (not the host): production is DO Managed MySQL 8, but this workstation runs
-# MariaDB 10.11 on 3306, and production-until-now (do1) ran MariaDB 10.5. MariaDB and MySQL 8 have
-# diverged enough (collations, DDL parsing, reserved words) that migrations MUST be authored and
-# tested against real MySQL 8 to be trustworthy at cutover. A container gives us that engine,
-# version-pinned and isolated, without disturbing anything on the host.
+# WHY a container (not the host): production is MySQL 8, while a development machine usually has
+# some other engine on 3306 already — often MariaDB. MariaDB and MySQL 8 have diverged enough
+# (collations, DDL parsing, reserved words) that migrations MUST be authored and tested against real
+# MySQL 8 to be trustworthy. A container gives us that engine, version-pinned and isolated, without
+# disturbing whatever the host already runs.
 #
-# HOST PORT: purely a local-dev artifact — nothing in production depends on it. 3309 on this machine
-# because 3306 is the host MariaDB, 3307 another container, and 3308 the zebrafish-facility-manager
-# container (which this deliberately does NOT share: different schema, different migration chain).
-# Override with DB_HOST_PORT if 3309 is taken. Connect with:
+# HOST PORT: purely a local-dev artifact — nothing in production depends on it. 3309 by default
+# simply to stay clear of a database already on 3306; override with DB_HOST_PORT if it collides.
+# Give this service its own container rather than sharing one with another project: different
+# schema, different migration chain. Connect with:
 #   mysql -h 127.0.0.1 -P ${DB_HOST_PORT:-3309} -uroot -prootpass
 # (use 127.0.0.1, not localhost — localhost routes to the MariaDB unix socket.)
 #

@@ -1,68 +1,66 @@
-# deploy.conf — host-specific deploy values (the ONLY place a host differs).
+# deploy.conf — values specific to THIS host (the only place one deployment differs from another).
 #
-# Copy to deploy/deploy.conf (gitignored, like the /etc/zfin-data-api env file) and fill in for
-# THIS host, then run deploy/render-config.sh to generate the systemd units + Caddy site file from
-# the committed *.tmpl files. Nothing host-specific is baked into the tracked files, so porting to
-# another droplet is: edit these values, re-render.
+# Copy to deploy/deploy.conf (gitignored, like the env file in /etc) and fill in for the machine you
+# are deploying to, then run deploy/render-config.sh to generate its systemd units and Caddy site
+# file from the committed templates. Nothing host-specific is baked into a tracked file, so moving
+# to another machine is: edit this, re-render.
 #
-# The values below are do2's intended values, as a working reference.
+# The values below are illustrative defaults, not a live deployment. Change what you need to.
 
 # ---------------------------------------------------------------------------
 # TWO ACCOUNTS, because there are two jobs
 # ---------------------------------------------------------------------------
 
 # DEPLOY identity. Owns the checkout, runs git pull / npm ci / npm run build, and needs sudo —
-# installing systemd units and reloading Caddy is root's work. The `-admin` suffix follows the
-# convention already on this droplet (dg-tour-admin). This is the account you log into to operate
-# the box, and the facility servers will share it when they follow.
+# installing systemd units and reloading Caddy is root's work. This is the account you log into to
+# operate the service, so give it a shell and its own SSH key.
 #
-# It needs a real password: sudo authenticates against the password field, so an account created
-# with --disabled-password is in the sudo group and still cannot sudo.
-SERVICE_USER=zsm-admin
+# It also needs a real password: sudo authenticates against the password field, so an account
+# created with --disabled-password ends up in the sudo group and still unable to sudo.
+SERVICE_USER=zfin-api-admin
 
 # RUNTIME identity. What the API and loader processes actually run as. A system account: no
-# password, no shell, no sudo, no home. It needs exactly four things — read the checkout, read
-# /etc/zfin-data-api/zfin-data-api.env, listen on APP_PORT, reach MySQL — and a flaw in the Node
-# process yields exactly those and nothing else.
+# password, no shell, no home, never logged into. It needs exactly four things — read the checkout,
+# read the deployment env file, listen on APP_PORT, reach the database — and a flaw in the Node
+# process yields those and nothing else.
 #
-# One runtime account PER SERVICE, not one shared across everything on the box. That is the same
-# reasoning as the per-facility database users: a compromise should reach one service's credentials,
-# not every service's. When the facility servers land here they each get their own, all sharing a
-# group that can read the one shared checkout.
-RUNTIME_USER=zsm
+# Keep this SEPARATE from the deploy account. If one account does both, the service runs as a member
+# of the sudo group, and anyone who compromises the process can wait for a password rather than
+# needing one.
+#
+# One runtime account per service, rather than one shared by every service on the machine: a
+# compromise should reach one service's credentials, not all of them.
+RUNTIME_USER=zfin-api
 
 # ---------------------------------------------------------------------------
 
 # The code checkout root — also the systemd WorkingDirectory for both units.
 #
-# /srv, NOT a home directory. The runtime account has to read this tree, and a home directory is
-# 0750 to its owner — `zsm` simply cannot traverse into /home/zsm-admin. That alone settles it; the
-# units additionally set ProtectHome=yes, which hides /home from them altogether.
+# NOT a home directory. The runtime account has to read this tree, and a home directory is 0750 to
+# its owner, so the service could not traverse into it. The units additionally set ProtectHome=yes,
+# which hides /home from them altogether.
 #
-# Owned by the deploy user, group-readable by the runtime user, setgid so that a fresh `npm ci`
+# Owned by the deploy user, group-readable by the runtime user, setgid so that a later `npm ci`
 # keeps the group on everything it writes:
-#     sudo install -d -o zsm-admin -g zsm -m 2750 /srv/zfin-data-api
+#     sudo install -d -o $SERVICE_USER -g $RUNTIME_USER -m 2750 /srv/zfin-data-api
 APP_DIR=/srv/zfin-data-api
 
 # Absolute path to the Node binary (systemd has no nvm or PATH). Node 20+ is required by NestJS 11.
 #
-# A SYSTEM Node, not one under ~/.nvm. Same reason as APP_DIR: the runtime account cannot read
-# another user's home, and ProtectHome=yes hides /home from the unit besides. Installing it
-# system-wide also means the version that builds the code is the version that runs it. do1 and
-# dg-tour both carry an absolute nvm path in ExecStart; this drops that wart rather than
-# reproducing it.
+# A SYSTEM Node, not one under a user's ~/.nvm. Same reason as APP_DIR: the runtime account cannot
+# read another user's home, and ProtectHome=yes hides /home from the unit besides. Installing it
+# system-wide also means the version that builds the code is the version that runs it.
 NODE_BIN=/usr/bin/node
 
-# The public site hostname Caddy serves and auto-provisions a Let's Encrypt cert for. DNS must
-# already resolve this name to the droplet before the Caddy step.
+# The public hostname Caddy serves and obtains a Let's Encrypt certificate for. DNS must already
+# resolve this name to this machine before the Caddy step, or the certificate cannot be issued.
 #
-# FOR A STAGED CUTOVER, point a temporary name here first (e.g. zfin2.zebrafishfacilitymanager.com),
-# verify against the live do1 service, then re-render with the real name once DNS moves.
-# Start on the STAGING name. zfin.zebrafishfacilitymanager.com still resolves to do1 and keeps
-# serving from there; pointing this at it before cutover just has Caddy chase a certificate for a
-# host that answers somewhere else. Change to the real name at step 10, once the two agree.
-SITE_ADDRESS=zfin2.zebrafishfacilitymanager.com
+# REPLACING AN EXISTING DEPLOYMENT? Put a STAGING name here first — the live name still resolves to
+# the old machine, and pointing this at it before cutover only has Caddy chase a certificate for a
+# host that answers somewhere else. Verify the new deployment against the old one, then re-render
+# with the real name once DNS moves.
+SITE_ADDRESS=zfin-api.example.org
 
-# The localhost port the API listens on. Must match PORT in /etc/zfin-data-api/zfin-data-api.env.
-# do2 already runs dg-tour on 3478 (api) and 3479 (ingestor).
+# The localhost port the API listens on. Must match PORT in the deployment env file;
+# render-config.sh refuses to render if the two disagree. Check what is free:  ss -ltn
 APP_PORT=3480

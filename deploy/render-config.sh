@@ -7,9 +7,9 @@
 # is baked into tracked files. One config file per host drives them all, so porting to another box
 # is "edit deploy.conf, re-render" — no hand-editing of unit files that then drift from the repo.
 #
-# Ported from dg-tour/deploy/render-config.sh, with one significant difference: the Caddy output is
-# /etc/caddy/conf.d/zfin-data-api.caddy, NOT /etc/caddy/Caddyfile. dg-tour's script overwrites the
-# whole Caddyfile, so two apps on one droplet cannot both own it. See deploy/caddy/*.tmpl.
+# The Caddy output is /etc/caddy/conf.d/zfin-data-api.caddy, NOT /etc/caddy/Caddyfile. A kit that
+# writes the whole Caddyfile cannot share a host with another application that does the same, so
+# this one owns a single file and relies on an import. See deploy/caddy/*.tmpl.
 #
 # Usage:
 #   deploy/render-config.sh              # render into deploy/.rendered/ (does not touch the system)
@@ -82,7 +82,7 @@ check_caddy_import() {
   WARNING: /etc/caddy/Caddyfile does not import /etc/caddy/conf.d/.
   This site file will be installed but IGNORED — Caddy will reload without error and serve nothing
   for this host. Add this line at top level in the Caddyfile, and in whatever template renders it
-  (for dg-tour that is deploy/caddy/Caddyfile.tmpl, or its next --install will undo the edit):
+  (edit the TEMPLATE that generates it, not just the generated file, or the next render undoes it):
 
       import /etc/caddy/conf.d/*.caddy
 

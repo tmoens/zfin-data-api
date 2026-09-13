@@ -59,9 +59,9 @@ export class ConfigService {
   /**
    * The interface the server binds to. Defaults to loopback because the only thing that should ever
    * reach this process directly is Caddy, running on the same host. Nest's own default is
-   * 0.0.0.0 — every interface — which on do1 left port 4398 listening to the internet, saved from
-   * exposure only by a ufw rule nothing in this repo controls. A loopback bind does not depend on
-   * the firewall being right.
+   * 0.0.0.0 — every interface — which leaves the port listening to the internet, saved from
+   * exposure only by a firewall rule nothing in this repo controls. A loopback bind does not
+   * depend on the firewall being right.
    */
   get host(): string {
     return this.envConfig.HOST;

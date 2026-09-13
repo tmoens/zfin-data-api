@@ -3,13 +3,15 @@
 # Rendered by deploy/render-config.sh to /etc/caddy/conf.d/zfin-data-api.caddy — its OWN file, not
 # a block inside /etc/caddy/Caddyfile.
 #
-# WHY ITS OWN FILE. do2 also hosts dg-tour, whose deploy kit installs Caddy config with
-# `sudo cp .../Caddyfile /etc/caddy/Caddyfile` — it replaces the file wholesale. A site block added
-# to that file by hand survives exactly until the next dg-tour deploy, and the first symptom is
-# this API going dark. One file per app, pulled in by an `import`, means neither deploy can delete
-# the other's config.
+# WHY ITS OWN FILE. If this API shares a host with any other application, the question is who owns
+# /etc/caddy/Caddyfile. Deploy kits commonly install it with `cp .../Caddyfile /etc/caddy/Caddyfile`,
+# replacing the file wholesale — so a site block added there by hand survives only until that other
+# application's next deploy, and the first symptom is this API going dark with no error anywhere:
+# Caddy reloads cleanly and simply serves nothing for the host. One file per application, pulled in
+# by an `import`, means no deploy can delete another's config.
 #
-# REQUIRED ONCE, in dg-tour's Caddyfile template (deploy/caddy/Caddyfile.tmpl), at top level:
+# REQUIRED ONCE in the main Caddyfile — and in whatever template generates it, or the next render
+# undoes the edit — at top level:
 #
 #     import /etc/caddy/conf.d/*.caddy
 #

@@ -1,7 +1,7 @@
 [Unit]
 Description=ZFIN Data API (NestJS)
 # The database is DO Managed MySQL (remote), so wait for the network to be fully up — not merely
-# configured — before starting. (No local mysql.service to order on, unlike the old do1 unit.)
+# configured — before starting. There is no local mysql.service to order on.
 Wants=network-online.target
 After=network-online.target
 

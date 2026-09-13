@@ -4,8 +4,8 @@ Requires=zfin-data-loader.service
 
 [Timer]
 Unit=zfin-data-loader.service
-# 11:00 UTC — carried over from the do1 deployment. That is 04:00 Pacific, comfortably outside
-# working hours at every facility that uses this API, and well after ZFIN's own nightly publish.
+# 11:00 UTC. Chosen to fall outside working hours at the facilities that use this API, and well
+# after ZFIN's own nightly publish. Adjust to suit where your users are.
 OnCalendar=*-*-* 11:00:00
 # Run on next boot if the machine was down when the timer was due, rather than skipping a day.
 Persistent=true

@@ -34,7 +34,7 @@ to a new database means creating an empty schema and running the loader.
 | `GET /` | a plain-text description of the above |
 
 ```console
-$ curl https://zfin.zebrafishfacilitymanager.com/mutation/allele/sa12986
+$ curl https://zfin-api.example.org/mutation/allele/sa12986
 {"zfinId":"ZDB-ALT-130411-2656","alleleName":"sa12986","geneName":"lhfpl4a",
  "mutationType":"POINT_MUTATION","consequence":"splice site","zfinGeneId":"ZDB-GENE-111017-1"}
 ```
@@ -89,8 +89,9 @@ npm run load                          # populate from ZFIN (takes a few seconds)
 ```
 
 The container is MySQL **8.0.45**, pinned to match DO Managed MySQL. That matters: production ran
-MariaDB until the do2 migration, and MariaDB and MySQL 8 differ enough in collations, DDL parsing
-and reserved words that migrations must be authored against the engine that will actually run them.
+MySQL, while a development machine often has some other engine on 3306 already. MariaDB and MySQL 8
+differ enough in collations, DDL parsing and reserved words that migrations must be authored against
+the engine that will actually run them.
 
 While iterating on the loader, download the two ZFIN files once and serve them locally rather than
 pulling many megabytes from ZFIN repeatedly — see the commented `ZFIN_*_URL` values in the sample.
@@ -124,9 +125,11 @@ DB_HOST=<cluster> DB_PORT=25060 DB_NAME=zfin_data DB_USER=doadmin DB_PASSWORD=<p
 ## Deployment
 
 See **[deploy/README.md](deploy/README.md)** for the full runbook: provisioning the database on DO
-Managed MySQL, the Caddy + systemd arrangement, and the do1 → do2 cutover.
+MySQL, the Caddy + systemd arrangement, the two-account model the services run under, and
+replacing an existing deployment.
 
 In short: Caddy terminates TLS and proxies to a loopback-bound Node process under systemd, with a
-second unit and a timer for the nightly load, and all configuration in `/etc/zfin-data-api/`. It
-follows the same model as `zf-server` and `dg-tour`; `deploy/render-config.sh` generates this
-host's unit files and Caddy site from `deploy/deploy.conf`.
+second unit and a timer for the nightly load, and all configuration in `/etc/zfin-data-api/`. The
+service runs as a dedicated account that can do nothing but read its code, read one config file,
+listen on a port and reach the database. `deploy/render-config.sh` generates a given host's unit
+files and Caddy site from `deploy/deploy.conf`, so nothing host-specific is committed.
