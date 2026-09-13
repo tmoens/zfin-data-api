@@ -17,7 +17,11 @@ Type=simple
 User=${RUNTIME_USER}
 Group=${RUNTIME_USER}
 
-WorkingDirectory=${APP_DIR}
+# Not ${APP_DIR} itself: that folder holds several installed versions side by side, plus a
+# `current` shortcut pointing at the one that should be running. Running from the shortcut is what
+# makes a rollback a matter of repointing it and restarting, with the previous version still intact
+# on disk. See deploy/install-release.sh.
+WorkingDirectory=${APP_DIR}/current
 
 # The app reads and Joi-validates this directory's zfin-data-api.env itself — it is NOT a systemd
 # EnvironmentFile. That is deliberate: parsing it in the app is what allows the schema to be an

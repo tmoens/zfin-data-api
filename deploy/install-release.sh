@@ -1,0 +1,191 @@
+#!/usr/bin/env bash
+#
+# install-release.sh — install an artifact built by pack-release.sh. RUNS ON THE TARGET.
+#
+# The layout it maintains:
+#
+#   /srv/zfin-data-api/
+#     releases/
+#       zfin-data-api-20260913T193000Z-c852d8f/   dist, node_modules, package.json, RELEASE
+#       zfin-data-api-20260912T080000Z-a74c0ae/
+#     current -> releases/zfin-data-api-20260913T193000Z-c852d8f
+#
+# The unit's WorkingDirectory is .../current, so a deploy is: unpack beside, flip the symlink,
+# restart. There is no window in which the directory is half-updated — the old release stays intact
+# and untouched until the symlink moves, and moving it is a single atomic rename.
+#
+# That also makes rollback cheap: the previous release is still on disk, complete, so going back is
+# a symlink flip and a restart. No rebuild, no network, no registry.
+#
+# IT DOES NOT RUN MIGRATIONS. Those are an admin-plane action with a different database credential,
+# run deliberately — see the deployment guide. If a release needs a schema change, apply it before
+# installing the release that depends on it.
+#
+# Usage:
+#   sudo install-release.sh <artifact.tgz>        # install and make current
+#   sudo install-release.sh --rollback            # return to the previous release
+#   sudo install-release.sh --list                # what is on disk, and what is live
+#
+set -euo pipefail
+
+APP_DIR="${APP_DIR:-/srv/zfin-data-api}"
+SERVICE="${SERVICE:-zfin-data-api}"
+ENV_FILE="${ENV_FILE:-/etc/zfin-data-api/zfin-data-api.env}"
+KEEP="${KEEP:-5}"           # how many releases to leave on disk
+HEALTH_TIMEOUT="${HEALTH_TIMEOUT:-30}"
+# How to drive systemd. Restarting a system service needs root, so this is normally invoked under
+# sudo and plain `systemctl` is right. Overridable so the script can be exercised against a
+# --user service, and so a deployer holding only a narrow `sudo systemctl restart ...` rule can set
+# SYSTEMCTL="sudo systemctl" and run the rest unprivileged.
+SYSTEMCTL="${SYSTEMCTL:-systemctl}"
+
+releases="$APP_DIR/releases"
+current="$APP_DIR/current"
+
+die() { echo "error: $*" >&2; exit 1; }
+
+# Two distinct privileges are needed, and they are not the same one. Writing under $APP_DIR is
+# ordinary file permission — a deployer in the owning group has it without root. Restarting the
+# service is root's. Check the first here and let $SYSTEMCTL answer for the second, rather than
+# demanding uid 0 for both and obscuring which is actually required.
+mkdir -p "$APP_DIR" 2>/dev/null || true
+[ -w "$APP_DIR" ] || die "cannot write $APP_DIR — run under sudo, or join the group that owns it"
+
+# The port the health check should probe. Read from the deployment config rather than duplicated
+# here, so the two cannot disagree.
+app_port() {
+  [ -r "$ENV_FILE" ] || return 1
+  grep -E '^[[:space:]]*PORT=' "$ENV_FILE" | tail -1 | cut -d= -f2 | tr -d '[:space:]'
+}
+
+# Point `current` at $1 atomically. `ln -sfn` unlinks and recreates, leaving a moment with no
+# symlink at all; creating a temporary name and renaming over is a single rename() syscall.
+point_current_at() {
+  ln -s "$1" "$APP_DIR/.current.$$"
+  mv -T "$APP_DIR/.current.$$" "$current"
+}
+
+# Is the service actually serving? Restarting reports success as soon as the process starts, which
+# is not the same as the process working — a bad config or an unreachable database exits moments
+# later, after systemctl has already returned 0.
+healthy() {
+  local port deadline
+  port="$(app_port)" || { echo "  (no PORT in $ENV_FILE; checking unit state only)"; }
+  deadline=$(( SECONDS + HEALTH_TIMEOUT ))
+  while [ $SECONDS -lt $deadline ]; do
+    $SYSTEMCTL is-active --quiet "$SERVICE" || { sleep 1; continue; }
+    if [ -n "${port:-}" ]; then
+      curl -fsS --max-time 3 "http://127.0.0.1:${port}/health" >/dev/null 2>&1 && return 0
+    else
+      return 0
+    fi
+    sleep 1
+  done
+  return 1
+}
+
+list() {
+  echo "releases in $releases:"
+  local live; live="$(readlink -f "$current" 2>/dev/null || true)"
+  for d in "$releases"/*/; do
+    [ -d "$d" ] || continue
+    d="${d%/}"
+    if [ "$(readlink -f "$d")" = "$live" ]; then printf "  * %s   (current)\n" "$(basename "$d")"
+    else printf "    %s\n" "$(basename "$d")"; fi
+  done
+  [ -r "$current/RELEASE" ] && { echo; sed 's/^/  /' "$current/RELEASE"; }
+}
+
+# --- subcommands -------------------------------------------------------------
+case "${1:-}" in
+  --list) list; exit 0 ;;
+  --rollback)
+    live="$(basename "$(readlink -f "$current")")"
+    prev="$(ls -1 "$releases" | grep -vFx "$live" | sort | tail -1 || true)"
+    [ -n "$prev" ] || die "no other release on disk to roll back to"
+    echo "==> rolling back: $live -> $prev"
+    point_current_at "$releases/$prev"
+    $SYSTEMCTL restart "$SERVICE"
+    healthy && { echo "==> healthy on $prev"; exit 0; }
+    die "rolled back to $prev but it is not healthy either — look at: journalctl -u $SERVICE -n 50"
+    ;;
+  "") die "usage: $0 <artifact.tgz> | --rollback | --list" ;;
+esac
+
+artifact="$1"
+[ -r "$artifact" ] || die "cannot read $artifact"
+
+# --- unpack ------------------------------------------------------------------
+# Unpack into a hidden directory first, so an interrupted or malformed transfer never leaves a
+# half-written release sitting in releases/ looking installable. The release name comes from the
+# archive's own top-level directory rather than from the filename, so a renamed tarball still
+# installs under the name it was built with.
+#
+# Do NOT reach for `tar -tzf ... | head -1` to learn that name: head closes the pipe, tar dies of
+# SIGPIPE, and under `set -o pipefail` that becomes the script's exit status. It fails silently,
+# before any message has been printed.
+echo "==> unpacking"
+mkdir -p "$releases"
+tmp="$(mktemp -d "$releases/.incoming.XXXXXX")"
+cleanup_tmp() { [ -n "${tmp:-}" ] && rm -rf "$tmp"; }
+trap cleanup_tmp EXIT
+
+tar -xzf "$artifact" -C "$tmp"
+
+shopt -s nullglob
+entries=("$tmp"/*)
+shopt -u nullglob
+[ "${#entries[@]}" -eq 1 ] && [ -d "${entries[0]}" ] \
+  || die "$artifact should contain exactly one top-level directory; found ${#entries[@]} entries"
+
+name="$(basename "${entries[0]}")"
+dest="$releases/$name"
+
+[ -r "${entries[0]}/dist/main.js" ] || die "artifact has no dist/main.js"
+[ -d "${entries[0]}/node_modules" ] || die "artifact has no node_modules"
+
+if [ -e "$dest" ]; then
+  echo "==> $name is already on disk; reusing it"
+else
+  mv "${entries[0]}" "$dest"
+  echo "==> unpacked $name"
+fi
+
+# The runtime account only reads this tree; it never writes to it.
+chmod -R go-w "$dest"
+
+# --- flip and restart --------------------------------------------------------
+previous="$(readlink -f "$current" 2>/dev/null || true)"
+echo "==> pointing current at $name"
+point_current_at "$dest"
+
+echo "==> restarting $SERVICE"
+$SYSTEMCTL restart "$SERVICE"
+
+if healthy; then
+  echo "==> healthy"
+else
+  echo "==> NOT healthy after ${HEALTH_TIMEOUT}s" >&2
+  if [ -n "$previous" ] && [ -d "$previous" ]; then
+    echo "==> rolling back to $(basename "$previous")" >&2
+    point_current_at "$previous"
+    $SYSTEMCTL restart "$SERVICE"
+    healthy && echo "==> rolled back and healthy" >&2 || echo "==> rollback is ALSO unhealthy" >&2
+  fi
+  echo "    journalctl -u $SERVICE -n 50 --no-pager" >&2
+  exit 1
+fi
+
+# --- prune -------------------------------------------------------------------
+# Keep the live release and the most recent $KEEP; the point of keeping any is that rollback needs
+# a complete tree to return to.
+live="$(basename "$(readlink -f "$current")")"
+mapfile -t old < <(ls -1 "$releases" | sort -r | tail -n +$((KEEP + 1)) | grep -vFx "$live" || true)
+for r in "${old[@]:-}"; do
+  [ -n "$r" ] || continue
+  echo "==> pruning $r"
+  rm -rf "${releases:?}/$r"
+done
+
+echo
+list

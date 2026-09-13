@@ -34,15 +34,27 @@ RUNTIME_USER=zfin-api
 
 # ---------------------------------------------------------------------------
 
-# The code checkout root — also the systemd WorkingDirectory for both units.
+# Where installed versions of the application live on the target.
 #
-# NOT a home directory. The runtime account has to read this tree, and a home directory is 0750 to
-# its owner, so the service could not traverse into it. The units additionally set ProtectHome=yes,
-# which hides /home from them altogether.
+# This folder is managed by deploy/install-release.sh, which keeps several versions side by side
+# and a `current` shortcut pointing at the one that should be running:
 #
-# Owned by the deploy user, group-readable by the runtime user, setgid so that a later `npm ci`
-# keeps the group on everything it writes:
-#     sudo install -d -o $SERVICE_USER -g $RUNTIME_USER -m 2750 /srv/zfin-data-api
+#     /srv/zfin-data-api/
+#       releases/
+#         zfin-data-api-20260912T080000Z-a74c0ae/
+#         zfin-data-api-20260913T193000Z-c852d8f/
+#       current -> releases/zfin-data-api-20260913T193000Z-c852d8f
+#
+# The systemd units run from the shortcut, so rolling back is repointing it and restarting — the
+# previous version is still on disk, complete.
+#
+# NOT a home directory. The runtime account has to read this, and a home directory is 0750 to its
+# owner. The units also set ProtectHome=yes, which hides /home from them entirely.
+#
+# It holds no secrets — those are in /etc/zfin-data-api — so it does not need tight permissions.
+# Let a deploy group write it and everyone read it:
+#     sudo groupadd -f deploy && sudo usermod -aG deploy <you>
+#     sudo install -d -o root -g deploy -m 2775 /srv/zfin-data-api
 APP_DIR=/srv/zfin-data-api
 
 # Absolute path to the Node binary (systemd has no nvm or PATH). Node 20+ is required by NestJS 11.

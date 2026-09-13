@@ -138,25 +138,33 @@ A per-user nvm install cannot work here: the runtime account cannot read another
 (`0750`), and the units set `ProtectHome=yes`, which hides `/home` from them regardless. A system
 Node also means the version that builds the code is the version that runs it.
 
-### The checkout lives outside any home directory
+### Where the application lives on the target
 
-```bash
-# owner deploys, runtime group reads, nobody else sees it. The setgid bit (2) is what makes
-# `npm ci` keep the group on the node_modules tree it replaces.
-sudo install -d -o zfin-api-admin -g zfin-api -m 2750 /srv/zfin-data-api
+The target never builds anything. It receives a finished artifact, so it needs no git, no npm and no
+compiler — only the Node runtime installed above.
 
-sudo -u zfin-api-admin -i
-  git clone <repository-url> /srv/zfin-data-api
-  cd /srv/zfin-data-api
-  npm ci && npm run build
-  exit
+`deploy/install-release.sh` keeps several installed versions side by side, with a `current` shortcut
+pointing at whichever should be running:
 
-# prove the runtime account can read the build — the units cannot start otherwise
-sudo -u zfin-api test -r /srv/zfin-data-api/dist/main.js && echo "runtime account can read the build"
+```
+/srv/zfin-data-api/
+  releases/
+    zfin-data-api-20260912T080000Z-a74c0ae/
+    zfin-data-api-20260913T193000Z-c852d8f/
+  current -> releases/zfin-data-api-20260913T193000Z-c852d8f
 ```
 
-The service needs no write access anywhere: logs go to journald and all state is in the database, so
-the units mount the whole filesystem read-only.
+The units run from `current`, so rolling back is repointing it and restarting — the previous version
+is still there, complete, needing no rebuild and no network.
+
+This folder holds no secrets (those are in `/etc/zfin-data-api`), so it does not need tight
+permissions. Let a deploy group write it, and nothing is owned by an individual:
+
+```bash
+sudo groupadd -f deploy
+sudo usermod -aG deploy <each-deployer>
+sudo install -d -o root -g deploy -m 2775 /srv/zfin-data-api
+```
 
 ### What the units do beyond changing user
 
@@ -323,12 +331,35 @@ normally and report nothing.
 
 ## Deploying a new version
 
+**On the build machine** — a workstation or a CI runner, never the target:
+
 ```bash
-sudo -u zfin-api-admin -i
-cd /srv/zfin-data-api && git pull && npm ci && npm run build
-exit
-# apply any new migrations on the admin plane (step 4), then:
-sudo systemctl restart zfin-data-api
+deploy/pack-release.sh                 # -> dist-releases/<name>.tgz, about 25 MB
+scp dist-releases/<name>.tgz <target>:/tmp/
 ```
 
-Configuration is in `/etc/zfin-data-api/`, so none of this can touch it.
+`npm ci` executes package lifecycle scripts, so wherever it runs, code from the registry runs as the
+invoking user. Keeping it here means that user is you on a workstation, not a sudo-capable account
+on a production host.
+
+**On the target:**
+
+```bash
+sudo /srv/zfin-data-api/install-release.sh /tmp/<name>.tgz
+```
+
+It unpacks beside the current version, repoints `current`, restarts the service, and then checks
+that the service is actually answering — `systemctl restart` returns success as soon as the process
+*starts*, which is not the same as it working. If the health check fails it puts `current` back,
+restarts, and exits non-zero.
+
+```bash
+sudo /srv/zfin-data-api/install-release.sh --list        # what is installed, and what is live
+sudo /srv/zfin-data-api/install-release.sh --rollback    # back to the previous version
+```
+
+**Schema changes** are separate and deliberate — see step 4. If a release needs one, apply it before
+installing that release. The migration CLI runs from the artifact itself: TypeORM is a production
+dependency, so its CLI ships in the release and the migrations are compiled into `dist/`.
+
+Configuration lives in `/etc/zfin-data-api/`, so none of this can touch it.

@@ -38,3 +38,6 @@ npm-debug.log*
 # Host-specific deploy values + whatever render-config.sh produced from them.
 /deploy/deploy.conf
 /deploy/.rendered
+
+# Built release artifacts (pack-release.sh output).
+/dist-releases
