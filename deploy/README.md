@@ -57,40 +57,7 @@ split appears again in the operating-system accounts at step 2.
 
 ---
 
-## 1. Database
-
-```sql
--- as the administrative user
-CREATE DATABASE zfin_data CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
-
-CREATE USER 'zfin_data'@'%' IDENTIFIED BY '<strong-password>';
-GRANT SELECT, INSERT, UPDATE, DELETE ON zfin_data.* TO 'zfin_data'@'%';
-FLUSH PRIVILEGES;
-
--- confirm the grant carries no DDL privilege
-SHOW GRANTS FOR 'zfin_data'@'%';
-```
-
-A managed MySQL service will require TLS and give you a CA certificate to verify against. Put it on
-the host where the application can read it, and set `DB_SSL_CA` to its path:
-
-```bash
-sudo install -d -m 755 /etc/zfin-data-api
-sudo cp ca-certificate.crt /etc/zfin-data-api/db-ca.crt
-sudo chmod 644 /etc/zfin-data-api/db-ca.crt
-```
-
-Managed services also restrict which hosts may connect — add this host to that allow list. The port
-varies by provider: 3306 self-hosted, 25060 on DigitalOcean Managed MySQL, 3306 on RDS. Don't
-hard-code it.
-
-> **Migrating from an existing deployment? Do not copy the data.** Every row in this database is
-> re-derived from zfin.org nightly, so a migration is an empty schema plus one loader run. There is
-> no dump, no import, and no cross-engine collation drift to reconcile.
-
----
-
-## 2. Accounts, Node, and the checkout
+## 1. Accounts, because there are two jobs
 
 **Two accounts, because there are two jobs.** Deploying means installing systemd units and reloading
 Caddy — root's work, so it needs sudo. *Running* the service means reading the code, reading one env
@@ -126,7 +93,8 @@ sudo adduser --system --group --no-create-home --shell /usr/sbin/nologin zfin-ap
 Give the deploy account its own SSH key, so deploys do not depend on another administrator's
 session.
 
-### Node goes in /usr, not under nvm
+
+## 2. Node, and where releases land on the target
 
 ```bash
 curl -fsSL https://deb.nodesource.com/setup_24.x | sudo -E bash -
@@ -138,7 +106,7 @@ A per-user nvm install cannot work here: the runtime account cannot read another
 (`0750`), and the units set `ProtectHome=yes`, which hides `/home` from them regardless. A system
 Node also means the version that builds the code is the version that runs it.
 
-### Where the application lives on the target
+
 
 The target never builds anything. It receives a finished artifact, so it needs no git, no npm and no
 compiler — only the Node runtime installed above.
@@ -165,6 +133,122 @@ sudo groupadd -f deploy
 sudo usermod -aG deploy <each-deployer>
 sudo install -d -o root -g deploy -m 2775 /srv/zfin-data-api
 ```
+
+The target has no checkout, so the install script has to be put there once — it is an administrative
+tool, so it goes where those live:
+
+```bash
+scp deploy/install-release.sh <target>:/tmp/
+ssh <target> 'sudo install -o root -g root -m 755 /tmp/install-release.sh /usr/local/sbin/install-release.sh'
+```
+
+Copy it again whenever it changes; it is versioned in this repository alongside the units.
+
+## 3. The configuration directory and the database certificate
+
+The deployment configuration and the database CA certificate both live in
+`/etc/zfin-data-api/`, outside the code, so that installing a release can never touch them.
+
+```bash
+sudo install -d -m 755 /etc/zfin-data-api
+```
+
+Put the CA certificate your database provider issued here as well — see step 4, which is
+where you obtain it.
+
+## 4. The database and its runtime user
+
+```sql
+-- as the administrative user
+CREATE DATABASE zfin_data CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+
+CREATE USER 'zfin_data'@'%' IDENTIFIED BY '<strong-password>';
+GRANT SELECT, INSERT, UPDATE, DELETE ON zfin_data.* TO 'zfin_data'@'%';
+FLUSH PRIVILEGES;
+
+-- confirm the grant carries no DDL privilege
+SHOW GRANTS FOR 'zfin_data'@'%';
+```
+
+A managed MySQL service will require TLS and give you a CA certificate to verify against. Put it on
+the host where the application can read it, and set `DB_SSL_CA` to its path:
+
+```bash
+sudo install -d -m 755 /etc/zfin-data-api
+sudo cp ca-certificate.crt /etc/zfin-data-api/db-ca.crt
+sudo chmod 644 /etc/zfin-data-api/db-ca.crt
+```
+
+Managed services also restrict which hosts may connect — add this host to that allow list. The port
+varies by provider: 3306 self-hosted, 25060 on DigitalOcean Managed MySQL, 3306 on RDS. Don't
+hard-code it.
+
+> **Migrating from an existing deployment? Do not copy the data.** Every row in this database is
+> re-derived from zfin.org nightly, so a migration is an empty schema plus one loader run. There is
+> no dump, no import, and no cross-engine collation drift to reconcile.
+
+---
+
+## 5. The deployment configuration file
+
+One file, read by both the server and the loader, living outside the checkout so that a `git pull`
+deploy structurally cannot touch it.
+
+```bash
+sudo cp /srv/zfin-data-api/environments/sample.env /etc/zfin-data-api/zfin-data-api.env
+sudo vi /etc/zfin-data-api/zfin-data-api.env      # DB_*, PORT, PUBLIC_URL, ZFIN_*_URL
+
+# root writes it (you edit with sudo); the runtime account reads it; nobody else can.
+sudo chown root:zfin-api /etc/zfin-data-api/zfin-data-api.env
+sudo chmod 640           /etc/zfin-data-api/zfin-data-api.env
+sudo -u zfin-api test -r /etc/zfin-data-api/zfin-data-api.env && echo "runtime account can read it"
+```
+
+`environments/sample.env` documents every key the server accepts, and that list is exhaustive: the
+schema is an **allowlist**, so an unrecognised key stops the server and names itself rather than
+being silently ignored.
+
+Set `DB_SSL_CA` when the database requires TLS — without it the connection is refused. Leave `HOST`
+at its `127.0.0.1` default: Caddy runs on the same host and is the only thing that should reach the
+process directly. `0640 root:<runtime account>` on the file means exactly one account can read the
+database password, and it is one that cannot log in.
+
+---
+
+## 6. If another application shares this host's Caddy
+
+Deploy kits commonly install Caddy configuration by replacing `/etc/caddy/Caddyfile` wholesale. Two
+applications cannot both do that, so this kit renders its site configuration to
+`/etc/caddy/conf.d/zfin-data-api.caddy` and relies on the main Caddyfile importing that directory:
+
+```caddy
+import /etc/caddy/conf.d/*.caddy
+```
+
+Add it to whatever **template** generates the Caddyfile, not only to the generated file, or the next
+render silently removes it. `render-config.sh` checks for the line and warns if it is missing —
+without it Caddy reloads cleanly, reports no error, and serves nothing for this host.
+
+---
+
+## 7. Install the units and the Caddy site
+
+```bash
+cp deploy/deploy.conf.example deploy/deploy.conf
+vi deploy/deploy.conf          # accounts, APP_DIR, NODE_BIN, SITE_ADDRESS, APP_PORT
+deploy/render-config.sh        # inspect deploy/.rendered/ first
+deploy/render-config.sh --install
+```
+
+**Do not enable the units yet** — there is no code for them to run until step 5. Installing the unit
+files and the Caddy site is all that happens here.
+
+`zfin-data-loader.service` is `Type=oneshot` — it loads and exits. Enabling the *service* would run
+it once at boot and nothing more; the timer is what makes it nightly.
+
+`render-config.sh` cross-checks `APP_PORT` against `PORT` in the installed env file and refuses to
+render on a mismatch — otherwise Caddy proxies to a port nothing is listening on, and both files
+look correct read separately.
 
 ### What the units do beyond changing user
 
@@ -193,58 +277,21 @@ and keep the account split.
 
 ---
 
-## 3. Configuration
+## 8. Build and install the first release
 
-One file, read by both the server and the loader, living outside the checkout so that a `git pull`
-deploy structurally cannot touch it.
+The target builds nothing, so the code arrives as an artifact built elsewhere.
+
+**On the build machine** — your workstation, or later a CI runner:
 
 ```bash
-sudo cp /srv/zfin-data-api/environments/sample.env /etc/zfin-data-api/zfin-data-api.env
-sudo vi /etc/zfin-data-api/zfin-data-api.env      # DB_*, PORT, PUBLIC_URL, ZFIN_*_URL
-
-# root writes it (you edit with sudo); the runtime account reads it; nobody else can.
-sudo chown root:zfin-api /etc/zfin-data-api/zfin-data-api.env
-sudo chmod 640           /etc/zfin-data-api/zfin-data-api.env
-sudo -u zfin-api test -r /etc/zfin-data-api/zfin-data-api.env && echo "runtime account can read it"
+deploy/pack-release.sh                       # -> dist-releases/<name>.tgz, about 25 MB
+scp dist-releases/<name>.tgz <target>:/tmp/
 ```
 
-`environments/sample.env` documents every key the server accepts, and that list is exhaustive: the
-schema is an **allowlist**, so an unrecognised key stops the server and names itself rather than
-being silently ignored.
-
-Set `DB_SSL_CA` when the database requires TLS — without it the connection is refused. Leave `HOST`
-at its `127.0.0.1` default: Caddy runs on the same host and is the only thing that should reach the
-process directly. `0640 root:<runtime account>` on the file means exactly one account can read the
-database password, and it is one that cannot log in.
-
----
-
-## 4. Schema
-
-Migrations run on the **admin plane**, so pass the administrative credential explicitly — the
-runtime user in the env file cannot execute DDL. The migration CLI deliberately takes plain `DB_*`
-variables rather than reading the deployment config, because the two use different credentials.
+**On the target:**
 
 ```bash
-cd /srv/zfin-data-api
- DB_HOST=<host> DB_PORT=<port> DB_NAME=zfin_data \
- DB_USER=<admin-user> DB_PASSWORD=<admin-password> \
- DB_SSL_CA=/etc/zfin-data-api/db-ca.crt \
- npm run migration:run
-```
-
-The leading space keeps the password out of shell history. Re-running is safe: applied migrations
-are recorded and skipped.
-
----
-
-## 5. systemd and Caddy
-
-```bash
-cp deploy/deploy.conf.example deploy/deploy.conf
-vi deploy/deploy.conf          # accounts, APP_DIR, NODE_BIN, SITE_ADDRESS, APP_PORT
-deploy/render-config.sh        # inspect deploy/.rendered/ first
-deploy/render-config.sh --install
+sudo install-release.sh /tmp/<name>.tgz
 sudo systemctl enable --now zfin-data-api
 sudo systemctl enable --now zfin-data-loader.timer    # the TIMER, not the service
 ```
@@ -252,27 +299,42 @@ sudo systemctl enable --now zfin-data-loader.timer    # the TIMER, not the servi
 `zfin-data-loader.service` is `Type=oneshot` — it loads and exits. Enabling the *service* would run
 it once at boot and nothing more; the timer is what makes it nightly.
 
-`render-config.sh` cross-checks `APP_PORT` against `PORT` in the installed env file and refuses to
-render on a mismatch — otherwise Caddy proxies to a port nothing is listening on, and both files
-look correct read separately.
+The install script unpacks beside any existing version, repoints `current`, restarts, and then checks
+the service is actually answering. If it is not, it puts `current` back and exits non-zero.
 
-### If another application shares this host's Caddy
+## 9. Create the schema, and fill the tables
 
-Deploy kits commonly install Caddy configuration by replacing `/etc/caddy/Caddyfile` wholesale. Two
-applications cannot both do that, so this kit renders its site configuration to
-`/etc/caddy/conf.d/zfin-data-api.caddy` and relies on the main Caddyfile importing that directory:
+The tables do not exist yet. Migrations run on the **admin plane** with the administrative database
+credential — the runtime user in the config file cannot execute DDL.
 
-```caddy
-import /etc/caddy/conf.d/*.caddy
+They run from the installed release: TypeORM is a production dependency, so its CLI ships in the
+artifact and the migrations are compiled into `dist/`. No npm, no TypeScript, no toolchain.
+
+```bash
+cd /srv/zfin-data-api/current
+ DB_HOST=<host> DB_PORT=<port> DB_NAME=zfin_data \
+ DB_USER=<admin-user> DB_PASSWORD=<admin-password> \
+ DB_SSL_CA=/etc/zfin-data-api/db-ca.crt \
+ node node_modules/typeorm/cli.js migration:run -d dist/data-source.js
 ```
 
-Add it to whatever **template** generates the Caddyfile, not only to the generated file, or the next
-render silently removes it. `render-config.sh` checks for the line and warns if it is missing —
-without it Caddy reloads cleanly, reports no error, and serves nothing for this host.
+The leading space keeps the password out of shell history. Re-running is safe — applied migrations
+are recorded and skipped. `migration:show` lists them without changing anything.
 
----
+Then fill the tables:
 
-## 6. Verify, and cut over
+```bash
+sudo systemctl start zfin-data-loader
+journalctl -u zfin-data-loader -n 20 --no-pager
+```
+
+A good load takes seconds and logs both datasets. Until it has run, the service answers `/health`
+but every allele lookup returns nothing.
+
+**When a future release needs a schema change**, apply it *before* installing that release. Deploys
+never alter your database on their own.
+
+## 10. Verify, and cut over
 
 ```bash
 systemctl is-active zfin-data-api
@@ -345,7 +407,7 @@ on a production host.
 **On the target:**
 
 ```bash
-sudo /srv/zfin-data-api/install-release.sh /tmp/<name>.tgz
+sudo install-release.sh /tmp/<name>.tgz
 ```
 
 It unpacks beside the current version, repoints `current`, restarts the service, and then checks
@@ -354,12 +416,11 @@ that the service is actually answering — `systemctl restart` returns success a
 restarts, and exits non-zero.
 
 ```bash
-sudo /srv/zfin-data-api/install-release.sh --list        # what is installed, and what is live
-sudo /srv/zfin-data-api/install-release.sh --rollback    # back to the previous version
+sudo install-release.sh --list        # what is installed, and what is live
+sudo install-release.sh --rollback    # back to the previous version
 ```
 
-**Schema changes** are separate and deliberate — see step 4. If a release needs one, apply it before
-installing that release. The migration CLI runs from the artifact itself: TypeORM is a production
-dependency, so its CLI ships in the release and the migrations are compiled into `dist/`.
+**Schema changes** are separate and deliberate — see step 9. If a release needs one, apply it before
+installing that release.
 
 Configuration lives in `/etc/zfin-data-api/`, so none of this can touch it.
