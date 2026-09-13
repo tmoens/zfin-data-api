@@ -29,26 +29,12 @@ set -a; source "$conf"; set +a
   "${NODE_BIN:?set in deploy.conf}" "${SITE_ADDRESS:?set in deploy.conf}" \
   "${APP_PORT:?set in deploy.conf}"
 
-[ -x "$NODE_BIN" ] || echo "warning: NODE_BIN ($NODE_BIN) is not executable on this host." >&2
-id "$RUNTIME_USER" >/dev/null 2>&1 || echo "warning: RUNTIME_USER ($RUNTIME_USER) does not exist yet — the units will fail to start until it does." >&2
-# A release has to be installed before the units can start, and the runtime account has to be able
-# to read it. Both are easy to get wrong and neither shows up until the service fails to start.
-if [ -d "$APP_DIR" ] && [ -e "$APP_DIR/current" ] \
-   && ! sudo -u "$RUNTIME_USER" test -r "$APP_DIR/current/dist/main.js" 2>/dev/null; then
-  echo "warning: $RUNTIME_USER cannot read $APP_DIR/current/dist/main.js — check the mode on $APP_DIR (expected 755, world-readable)." >&2
-fi
+# NO ENVIRONMENT CHECKS HERE. This script renders text files and runs wherever the repository is —
+# normally a workstation, not the target. Anything it could test (does RUNTIME_USER exist, is
+# NODE_BIN executable, does the Caddyfile import conf.d, does PORT match APP_PORT) would be tested
+# against the WRONG machine, and a confident warning about the wrong computer is worse than none.
+# The checklist printed at the end names what to verify on the target instead.
 
-# The port the unit serves and the port the app binds are set in two different files; a mismatch
-# gives a site that 502s with both halves looking correct in isolation.
-env_file=/etc/zfin-data-api/zfin-data-api.env
-if [ -r "$env_file" ]; then
-  configured_port="$(grep -E '^[[:space:]]*PORT=' "$env_file" | tail -1 | cut -d= -f2 | tr -d '[:space:]')"
-  if [ -n "$configured_port" ] && [ "$configured_port" != "$APP_PORT" ]; then
-    echo "error: APP_PORT ($APP_PORT) in deploy.conf disagrees with PORT ($configured_port) in $env_file." >&2
-    echo "       Caddy would proxy to a port nothing is listening on. Make them match." >&2
-    exit 1
-  fi
-fi
 
 mkdir -p "$out"
 render() {
@@ -77,51 +63,40 @@ fi
 
 # Our site file only takes effect if the main Caddyfile imports the directory. Check rather than
 # assume: without the import, Caddy reloads cleanly, reports no error, and serves nothing here.
-check_caddy_import() {
-  if [ -r /etc/caddy/Caddyfile ] && ! grep -qE '^\s*import\s+/etc/caddy/conf\.d/' /etc/caddy/Caddyfile; then
-    cat >&2 <<'MSG'
-
-  WARNING: /etc/caddy/Caddyfile does not import /etc/caddy/conf.d/.
-  This site file will be installed but IGNORED — Caddy will reload without error and serve nothing
-  for this host. Add this line at top level in the Caddyfile, and in whatever template renders it
-  (edit the TEMPLATE that generates it, not just the generated file, or the next render undoes it):
-
-      import /etc/caddy/conf.d/*.caddy
-
-MSG
-    return 1
-  fi
-  return 0
-}
-
 if [ "${1:-}" = "--install" ]; then
-  echo "installing (sudo)..."
+  # Only meaningful when this repository is checked out ON the target.
+  echo "installing locally (sudo)..."
   sudo install -d -m 755 /etc/caddy/conf.d
-  sudo cp "$out/zfin-data-api.service" "$out/zfin-data-loader.service" "$out/zfin-data-loader.timer" /etc/systemd/system/
+  sudo install -o root -g root -m 644 "$out"/*.service "$out"/*.timer /etc/systemd/system/
   sudo systemctl daemon-reload
-  sudo cp "$out/zfin-data-api.caddy" /etc/caddy/conf.d/zfin-data-api.caddy
-  check_caddy_import || true
+  sudo install -o root -g root -m 644 "$out/zfin-data-api.caddy" /etc/caddy/conf.d/
   sudo caddy validate --config /etc/caddy/Caddyfile
   sudo systemctl reload caddy
-  echo
-  echo "installed. Then:"
-  echo "  sudo systemctl enable --now zfin-data-api"
-  echo "  sudo systemctl enable --now zfin-data-loader.timer   # the TIMER, not the service"
-  echo "  sudo systemctl restart zfin-data-api                 # to pick up unit changes"
+  echo "installed."
 else
-  check_caddy_import || true
   cat <<MSG
 
-rendered into $out/ — NOT installed.
+rendered into $out/ — nothing installed.
 
-The service user owns the checkout but has no sudo, so rendering and installing are usually done by
-different people. Either re-run this as a sudoer with --install, or run these by hand:
+Ship them to the target and install there:
 
-  sudo install -d -m 755 /etc/caddy/conf.d
-  sudo cp $out/*.service $out/*.timer /etc/systemd/system/
-  sudo systemctl daemon-reload
-  sudo cp $out/zfin-data-api.caddy /etc/caddy/conf.d/zfin-data-api.caddy
-  sudo caddy validate --config /etc/caddy/Caddyfile
-  sudo systemctl reload caddy
+  scp $out/* <target>:/tmp/
+
+  ssh <target> '
+    sudo install -d -m 755 /etc/caddy/conf.d
+    sudo install -o root -g root -m 644 /tmp/zfin-data-api.service /tmp/zfin-data-loader.service \\
+                                        /tmp/zfin-data-loader.timer /etc/systemd/system/
+    sudo systemctl daemon-reload
+    sudo install -o root -g root -m 644 /tmp/zfin-data-api.caddy /etc/caddy/conf.d/
+    sudo caddy validate --config /etc/caddy/Caddyfile && sudo systemctl reload caddy
+  '
+
+Verify ON THE TARGET — this script cannot, it does not run there:
+
+  id $RUNTIME_USER
+  test -x $NODE_BIN && $NODE_BIN -v
+  grep -q 'import /etc/caddy/conf.d/' /etc/caddy/Caddyfile || echo 'MISSING IMPORT: site file ignored'
+  grep -E '^[[:space:]]*PORT=' /etc/zfin-data-api/zfin-data-api.env    # must be $APP_PORT
+
 MSG
 fi
