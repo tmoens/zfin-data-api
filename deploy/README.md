@@ -242,21 +242,48 @@ database password, and it is one that cannot log in.
 
 ---
 
-## 6. If another application shares this host's Caddy
+## 6. Caddy configuration belongs to the host
 
-Deploy kits commonly install Caddy configuration by replacing `/etc/caddy/Caddyfile` wholesale. Two
-applications cannot both do that, so this kit renders its site configuration to
-`/etc/caddy/conf.d/zfin-data-api.caddy` and relies on the main Caddyfile importing that directory:
+`/etc/caddy/Caddyfile` is the machine's, not any application's. Caddy requires the global options
+block to be first in that file and it cannot be imported, so it is structurally not a tenant's to
+own. Each site gets its own file under `conf.d/`, installed by that site's deploy, and the Caddyfile
+does nothing but pull them in:
 
 ```caddy
 import /etc/caddy/conf.d/*.caddy
 ```
 
-Add it to whatever **template** generates the Caddyfile, not only to the generated file, or the next
-render silently removes it. `render-config.sh` checks for the line and warns if it is missing —
-without it Caddy reloads cleanly, reports no error, and serves nothing for this host.
+If the file is already there and already correct, this step is done.
 
----
+### If an application currently owns the Caddyfile
+
+Deploy kits commonly install Caddy config by replacing `/etc/caddy/Caddyfile` wholesale. Two
+applications cannot both do that, so take the file back before adding a second site. This is safe
+while the server is running — nothing takes effect until the reload, and the validate runs first:
+
+```bash
+# keep a way back
+sudo cp -a /etc/caddy/Caddyfile /etc/caddy/Caddyfile.before-conf.d
+
+# the incumbent's block becomes its own file, byte for byte
+sudo install -d -m 755 /etc/caddy/conf.d
+sudo cp -a /etc/caddy/Caddyfile /etc/caddy/conf.d/<incumbent>.caddy
+
+# replace the Caddyfile with a stub: global options, if any, plus the import
+sudoedit /etc/caddy/Caddyfile
+
+sudo caddy validate --config /etc/caddy/Caddyfile   # nothing is live until this passes
+sudo systemctl reload caddy
+curl -s -o /dev/null -w '%{http_code}\n' https://<incumbent-hostname>/   # must be unchanged
+```
+
+An `import` glob that matches nothing is valid, so the import can go in before any site file exists.
+
+> **The incumbent's deploy kit will still replace the Caddyfile** until that kit is changed to write
+> `conf.d/<app>.caddy` instead. Running it deletes the import and takes every other site dark with
+> no error reported — Caddy reloads cleanly and simply serves nothing. Fix that kit, or know not to
+> run it.
+
 
 ## 7. Install the units and the Caddy site
 
@@ -273,9 +300,10 @@ files and the Caddy site is all that happens here.
 `zfin-data-loader.service` is `Type=oneshot` — it loads and exits. Enabling the *service* would run
 it once at boot and nothing more; the timer is what makes it nightly.
 
-`render-config.sh` cross-checks `APP_PORT` against `PORT` in the installed env file and refuses to
-render on a mismatch — otherwise Caddy proxies to a port nothing is listening on, and both files
-look correct read separately.
+`render-config.sh` makes no environment checks: it runs on a workstation, so anything it tested
+would be the wrong machine. It prints a short list to verify on the target instead — including that
+`APP_PORT` matches `PORT` in the deployed config, a mismatch that gives a site which 502s while both
+files look correct read separately.
 
 ### What the units do beyond changing user
 
@@ -352,7 +380,7 @@ Then fill the tables:
 
 ```bash
 sudo systemctl start zfin-data-loader
-journalctl -u zfin-data-loader -n 20 --no-pager
+sudo journalctl -u zfin-data-loader -n 20 --no-pager
 ```
 
 A good load takes seconds and logs both datasets. Until it has run, the service answers `/health`
@@ -364,13 +392,17 @@ never alter your database on their own.
 ## 10. Verify, and cut over
 
 ```bash
-systemctl is-active zfin-data-api
+systemctl is-active  zfin-data-api        # running now
+systemctl is-enabled zfin-data-api        # and will be after a reboot — NOT the same question
+systemctl is-enabled zfin-data-loader.timer
+systemctl list-timers zfin-data-loader.timer --no-pager   # must show a NEXT
+
 ps -o user= -C node                       # the runtime account, not the deploy account or root
 ss -ltn | grep <port>                     # 127.0.0.1:<port>, not *:<port>
 curl -s localhost:<port>/health
 
 # first population — the oneshot unit runs as the runtime account with the right config
-sudo systemctl start zfin-data-loader && journalctl -u zfin-data-loader -n 20 --no-pager
+sudo systemctl start zfin-data-loader && sudo journalctl -u zfin-data-loader -n 20 --no-pager
 ```
 
 A good load takes seconds and logs both datasets. Then, from outside:
@@ -378,6 +410,11 @@ A good load takes seconds and logs both datasets. Then, from outside:
 ```bash
 curl -s https://zfin-api.example.org/health
 curl -s https://zfin-api.example.org/mutation/allele/sa12986
+curl -s https://zfin-api.example.org/mutation/loadFromZfin      # must answer: Disabled
+
+# the app port must NOT be reachable from outside — Caddy is the only way in
+timeout 5 bash -c '</dev/tcp/zfin-api.example.org/<port>' 2>/dev/null \
+  && echo 'REACHABLE — check the firewall and HOST in the config' || echo 'unreachable, correct'
 ```
 
 **Replacing an existing deployment?** Both are live at this point, answering from separate databases
@@ -403,11 +440,19 @@ first.
 
 ## Operating it
 
+Reading a unit's log needs privilege: an ordinary account sees only its own messages. Either prefix
+with `sudo`, or put yourself in `adm` — the conventional Debian group for log reading, which grants
+**read only** and takes effect at your next login:
+
+```bash
+sudo usermod -aG adm <you>
+```
+
 ```bash
 systemctl status zfin-data-api
-journalctl -u zfin-data-api -f              # journald owns the logs; there is no log directory
+sudo journalctl -u zfin-data-api -f              # journald owns the logs; there is no log directory
 systemctl list-timers zfin-data-loader.timer
-journalctl -u zfin-data-loader --since today
+sudo journalctl -u zfin-data-loader --since today
 sudo systemctl start zfin-data-loader       # force a reload now
 ```
 
