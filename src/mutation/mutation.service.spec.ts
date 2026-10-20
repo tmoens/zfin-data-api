@@ -51,6 +51,27 @@ describe('MutationService.loadFromZfin', () => {
     ).toEqual(['a1', 'a2']);
   });
 
+  // The whole refill is one transaction so that a lookup never meets the empty table in between.
+  // Uncommitted, a reader sees yesterday's complete data; committed, it sees today's.
+  it('empties and refills the table inside one transaction', async () => {
+    const { service, fake } = subject(
+      [
+        row('ZDB-ALT-1', 'a1'),
+        row('ZDB-ALT-2', 'a2'),
+        row('ZDB-ALT-3', 'a3'),
+      ].join('\n'),
+      2,
+    );
+
+    await service.loadFromZfin();
+
+    expect(fake.manager.transaction).toHaveBeenCalledTimes(1);
+    expect(fake.outsideTransaction()).toEqual([]);
+    // And it really is the whole job: the clear plus every batch.
+    expect(fake.deletes()).toBe(1);
+    expect(fake.batches().map((b) => b.length)).toEqual([2, 1]);
+  });
+
   it('drops deficiencies and translocations', async () => {
     const { service, fake } = subject(
       [

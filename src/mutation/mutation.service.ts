@@ -2,7 +2,7 @@ import { HttpService } from '@nestjs/axios';
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { firstValueFrom } from 'rxjs';
-import { Repository } from 'typeorm';
+import { EntityManager, Repository } from 'typeorm';
 
 import { ConfigService } from '../config/config.service';
 import { Mutation } from './mutation.entity';
@@ -63,26 +63,41 @@ export class MutationService {
       );
     }
 
-    await this.repo
-      .createQueryBuilder()
-      .delete()
-      .from(Mutation)
-      .where('1')
-      .execute();
+    // ONE TRANSACTION, because the refill empties the table first. Outside a transaction there is a
+    // stretch — the whole refill — when the table is empty or half full, and a lookup during it
+    // answers "ZFIN has never heard of this allele" about every allele there is. That answer is
+    // indistinguishable from the truth, so it is believed. Inside a transaction a reader sees
+    // yesterday's complete data until the moment it sees today's.
+    //
+    // The clear has to stay a DELETE. TRUNCATE empties the table far faster and is the obvious
+    // tidy-up here, but it is DDL: MySQL commits the transaction around it, and the window this
+    // transaction exists to close reopens.
+    await this.repo.manager.transaction(async (manager) => {
+      await manager
+        .createQueryBuilder()
+        .delete()
+        .from(Mutation)
+        .where('1')
+        .execute();
 
-    // The INSERT query can get huge, so we do a limited number of rows at a time.
-    const batchSize = this.configService.recordsPerInsert;
-    for (let i = 0; i < mutations.length; i += batchSize) {
-      await this.insert(mutations.slice(i, i + batchSize));
-    }
+      // The INSERT query can get huge, so we do a limited number of rows at a time.
+      const batchSize = this.configService.recordsPerInsert;
+      for (let i = 0; i < mutations.length; i += batchSize) {
+        await this.insert(mutations.slice(i, i + batchSize), manager);
+      }
+    });
 
     const message = `Done mutation load from ${url}: ${mutations.length} mutations`;
     this.logger.log(message);
     return message;
   }
 
-  async insert(mutations: Mutation[]): Promise<boolean> {
-    await this.repo
+  /** One batch. `manager` keeps the write inside the caller's transaction where there is one. */
+  async insert(
+    mutations: Mutation[],
+    manager: EntityManager = this.repo.manager,
+  ): Promise<boolean> {
+    await manager
       .createQueryBuilder()
       .insert()
       .into(Mutation)

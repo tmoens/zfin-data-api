@@ -45,6 +45,25 @@ describe('TransgeneService.loadFromZfin', () => {
     ).toEqual(['a1', 'a2']);
   });
 
+  // The whole refill is one transaction so that a lookup never meets the empty table in between.
+  it('empties and refills the table inside one transaction', async () => {
+    const { service, fake } = subject(
+      [
+        row('ZDB-ALT-1', 'a1'),
+        row('ZDB-ALT-2', 'a2'),
+        row('ZDB-ALT-3', 'a3'),
+      ].join('\n'),
+      2,
+    );
+
+    await service.loadFromZfin();
+
+    expect(fake.manager.transaction).toHaveBeenCalledTimes(1);
+    expect(fake.outsideTransaction()).toEqual([]);
+    expect(fake.deletes()).toBe(1);
+    expect(fake.batches().map((b) => b.length)).toEqual([2, 1]);
+  });
+
   // A transgene that is also a mutation gets two lines; only the construct line is ours.
   it('keeps the construct line and ignores the companion gene line', async () => {
     const { service, fake } = subject(

@@ -2,7 +2,7 @@ import { HttpService } from '@nestjs/axios';
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { firstValueFrom } from 'rxjs';
-import { Repository } from 'typeorm';
+import { EntityManager, Repository } from 'typeorm';
 
 import { ConfigService } from '../config/config.service';
 import { Transgene } from './transgene.entity';
@@ -60,25 +60,33 @@ export class TransgeneService {
       );
     }
 
-    await this.repo
-      .createQueryBuilder()
-      .delete()
-      .from(Transgene)
-      .where('1')
-      .execute();
+    // ONE TRANSACTION — see the matching comment in MutationService.loadFromZfin for what an
+    // uncommitted window costs a caller.
+    await this.repo.manager.transaction(async (manager) => {
+      await manager
+        .createQueryBuilder()
+        .delete()
+        .from(Transgene)
+        .where('1')
+        .execute();
 
-    const batchSize = this.configService.recordsPerInsert;
-    for (let i = 0; i < transgenes.length; i += batchSize) {
-      await this.insert(transgenes.slice(i, i + batchSize));
-    }
+      const batchSize = this.configService.recordsPerInsert;
+      for (let i = 0; i < transgenes.length; i += batchSize) {
+        await this.insert(transgenes.slice(i, i + batchSize), manager);
+      }
+    });
 
     const message = `Done transgene load from ${url}: ${transgenes.length} transgenes`;
     this.logger.log(message);
     return message;
   }
 
-  async insert(tgs: Transgene[]): Promise<boolean> {
-    await this.repo
+  /** One batch. `manager` keeps the write inside the caller's transaction where there is one. */
+  async insert(
+    tgs: Transgene[],
+    manager: EntityManager = this.repo.manager,
+  ): Promise<boolean> {
+    await manager
       .createQueryBuilder()
       .insert()
       .into(Transgene)
